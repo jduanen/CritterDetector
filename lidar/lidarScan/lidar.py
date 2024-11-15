@@ -94,9 +94,7 @@ class Lidar():
         if not ydlidar.os_isOk():
             logging.error("Laser not OK")
             return None
-        print(f"SS: {self.laserScan.points.size()}")
         angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points])
-        print(f"SSS: {angles[0]}, {distances[0]}")
         return angles, distances
 
 
