@@ -7,38 +7,25 @@
 ################################################################################
 '''
 
-import argparse
-import json
 import logging
-import os
-import signal
-import sys
-import time
-import yaml
 
 import ydlidar
 
-import pdb  ## pdb.set_trace()
+#import pdb  ## pdb.set_trace()
 
+LIDAR_VERSION = "1.0.0"
 
-DEFAULTS = {
-    "portPath": "/dev/ydlidar",
-    "baudRate": 230400,
-    "logLevel": "WARNING",
-    "logFile": None,
-    "configsFile": "./.lidar.yaml",
-    "angleMax": 180.0,   # degrees (?)
-    "angleMin": -180.0,  # degrees (?)
-    "freq": 10.0,        # ????
-    "rangeMax": 16.0,    # ????
-    "rangeMin": 0.02,    # ????
-    "scanRate": 4,       # ????
-    "numScans": 100,     # ????
-    "version": "1.0.0"
-}
+DEF_LOG_LEVEL = "WARNING"
 
-
-_lidar = None
+DEF_CONFIGS_FILE = "./.lidar.yaml"
+DEF_PORT_PATH = "/dev/ydlidar"
+DEF_BAUD_RATE = 230400
+DEF_MAX_ANGLE = 180.0   # degrees
+DEF_MIN_ANGLE = -180.0  # degrees
+DEF_SCAN_FREQ = 10.0    # ????
+DEF_MAX_RANGE = 16.0    # ????
+DEF_MIN_RANGE = 0.02    # ????
+DEF_SCAN_RATE = 4       # ????
 
 
 class Lidar():
@@ -57,10 +44,10 @@ class Lidar():
 
         if not self.port:
             ports = ydlidar.lidarPortList()
-            self.port = "/dev/ydlidar"
+            self.port = DEF_PORT_PATH
             for key, value in ports.items():
                 self.port = value
-        logging.debug(f"Port: {self.port}")  #### TMP TMP TMP
+        logging.debug(f"Port: {self.port}")
 
         self.laser = ydlidar.CYdLidar()
         self.laser.setlidaropt(ydlidar.LidarPropSerialPort, self.port)
@@ -102,128 +89,17 @@ class Lidar():
         angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points])
         return angles, distances
 
+    '''
+    def info(self):
+        if not self.laser:
+            logging.error("Lidar not initialized")
+            return None
+        r = self.laser.getDeviceInfo(????)
+        print(f"INFO: {r}")
+        return(r)
+    '''
+
     def done(self):
         self.laser.turnOff()
         self.laser.disconnecting()
 
-
-def getOpts():
-    def signalHandler(sig, frame):
-        ''' Catch SIGHUP to force a restart and SIGINT to stop.""
-        '''
-        if sig == signal.SIGHUP:
-            logging.info("SIGHUP")
-            logging.error("FIXME: TBD")
-        elif sig == signal.SIGINT:
-            logging.info("SIGINT")
-            if _lidar:
-                _lidar.done()
-            exit(1)
-
-    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <scanRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>]"
-    ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "-c", "--configsFile", action="store", type=str,
-        help="Path to file with configuration info")
-    ap.add_argument(
-        "-A", "--angleMax", action="store", type=float,
-        help="Maximum scan angle (degrees)")
-    ap.add_argument(
-        "-a", "--angleMin", action="store", type=float,
-        help="Minimum scan angle (degrees)")
-    ap.add_argument(
-        "-f", "--freq", action="store", type=float,
-        help="Scan Frequency (Hz)")
-    ap.add_argument(
-        "-n", "--numScans", action="store", type=int,
-        help="Number of scans (int)")
-    ap.add_argument(
-        "-p", "--portPath", action="store", type=str,
-        help="Path to lidar device")
-    ap.add_argument(
-        "-R", "--rangeMax", action="store", type=float,
-        help="Maximum range (meters)")
-    ap.add_argument(
-        "-r", "--rangeMin", action="store", type=float,
-        help="Minimum range (meters)")
-    ap.add_argument(
-        "-s", "--scanRate", action="store", type=int,
-        help="???? (int)")
-    ap.add_argument(
-        "-L", "--logLevel", action="store", type=str,
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level")
-    ap.add_argument(
-        "-l", "--logFile", action="store", type=str,
-       help="Path to location of logfile (create it if it doesn't exist)")
-    ap.add_argument(
-        "-v", "--verbose", action="count", default=0,
-        help="print debug info")
-    cliOpts = ap.parse_args().__dict__
-
-    conf = {'version': '1.0.0', 'cli': cliOpts, 'confFile': {}, 'config': {}}
-    if cliOpts['configsFile']:
-        if not os.path.exists(cliOpts['configsFile']):
-            logging.error(f"Invalid configuration file: {cliOpts['configsFile']}")
-            exit(1)
-        with open(cliOpts['configsFile'], "r") as confsFile:
-            confs = list(yaml.load_all(confsFile, Loader=yaml.Loader))
-            if len(confs) >= 1:
-                conf['confFile'] = confs[0]
-                if len(confs) > 1:
-                    logging.warning(f"Multiple config docs in file. Using the first one")
-
-    # options precedence order: cmd line -> conf file -> defaults
-    #   cliOpts: cmd line options
-    #   conf: conf file options
-    #   DEFAULT: default options
-
-    def _configSelect(opt):
-        if opt in conf['cli'] and conf['cli'][opt]:
-            conf[opt] = conf['cli'][opt]
-        elif opt in conf['confFile'] and conf['confFile'][opt]:
-            conf[opt] = conf['confFile'][opt]
-        else:
-            conf[opt] = DEFAULTS[opt]
-
-    for opt in DEFAULTS.keys():
-        _configSelect(opt)
-
-    if cliOpts['verbose'] > 2:
-        print("CONF2")
-        json.dump(conf, sys.stdout, indent=4, sort_keys=True)
-        print("")
-
-    if conf['logFile']:
-        logging.basicConfig(filename=conf['logFile'], level=conf['logLevel'])
-    else:
-        logging.basicConfig(level=conf['logLevel'])
-
-    signal.signal(signal.SIGHUP, signalHandler)
-    signal.signal(signal.SIGINT, signalHandler)
-    return conf
-
-
-def run(options):
-    _lidar = Lidar()
-    while options.numScans is None or options.numScans > 0:
-        scan = _lidar.scan()
-        if scan:
-            print(f"Scan [{scan.stamp}]: #points={scan.points.size()}, timeFromLastScan=[{scan.config.scan_time}]")
-            j = 0
-            for pt in scan.points:
-                print(f"{pt.angle}, {pt.range}")
-                j += 1
-                if j > 10:
-                    break
-            if options.numScans:
-                options.numScans -= 1
-        else:
-            time.sleep(0.05)
-    _lidar.done()
-    _lidar = None
-
-
-if __name__ == '__main__':
-    opts = getOpts()
-    run(opts)
