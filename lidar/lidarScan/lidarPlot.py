@@ -123,7 +123,7 @@ def getOpts():
         help="print debug info")
     cliOpts = ap.parse_args().__dict__
 
-    conf = {'version': '1.0.0', 'cli': cliOpts, 'confFile': {}, 'config': {}}
+    conf = {'version': lidar.LIDAR_VERSION, 'cli': cliOpts, 'confFile': {}, 'config': {}}
     if cliOpts['configsFile']:
         if not os.path.exists(cliOpts['configsFile']):
             logging.error(f"Invalid configuration file: {cliOpts['configsFile']}")
