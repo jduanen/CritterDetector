@@ -9,5 +9,6 @@ pillow
 pip
 pyparsing
 python-dateutil
+pyyaml
 six
 ydlidar
