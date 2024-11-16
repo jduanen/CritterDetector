@@ -33,11 +33,11 @@ DEFAULTS = {
     "logLevel": "WARNING",
     "logFile": None,
     "configsFile": "./.lidar.yaml",
-    "angleMax": 180.0,   # degrees (?)
-    "angleMin": -180.0,  # degrees (?)
-    "freq": 10.0,        # Hz
-    "rangeMax": 16.0,    # meters
-    "rangeMin": 0.02,    # meters
+    "maxAngle": 180.0,   # degrees (?)
+    "minAngle": -180.0,  # degrees (?)
+    "scanFreq": 10.0,    # Hz
+    "maxRange": 16.0,    # meters
+    "minRange": 0.02,    # meters
     "sampleRate": 4,     # K samples/sec
     "numScans": 100,     # number of scans to make before exiting
     "version": lidar.LIDAR_VERSION
@@ -88,13 +88,13 @@ def getOpts():
         "-c", "--configsFile", action="store", type=str,
         help="Path to file with configuration info")
     ap.add_argument(
-        "-A", "--angleMax", action="store", type=float,
+        "-A", "--maxAngle", action="store", type=float,
         help="Maximum scan angle (degrees)")
     ap.add_argument(
-        "-a", "--angleMin", action="store", type=float,
+        "-a", "--minAngle", action="store", type=float,
         help="Minimum scan angle (degrees)")
     ap.add_argument(
-        "-f", "--freq", action="store", type=float,
+        "-f", "--scanFreq", action="store", type=float,
         help="Scan Frequency (Hz)")
     ap.add_argument(
         "-n", "--numScans", action="store", type=int,
@@ -103,10 +103,10 @@ def getOpts():
         "-p", "--portPath", action="store", type=str,
         help="Path to lidar device")
     ap.add_argument(
-        "-R", "--rangeMax", action="store", type=float,
+        "-R", "--maxRange", action="store", type=float,
         help="Maximum range (meters)")
     ap.add_argument(
-        "-r", "--rangeMin", action="store", type=float,
+        "-r", "--minRange", action="store", type=float,
         help="Minimum range (meters)")
     ap.add_argument(
         "-s", "--sampleRate", action="store", type=int,
@@ -151,9 +151,9 @@ def getOpts():
     #   DEFAULT: default options
 
     def _configSelect(opt):
-        if opt in conf['cli'] and conf['cli'][opt]:
+        if (opt in conf['cli']) and (conf['cli'][opt] is not None):
             conf[opt] = conf['cli'][opt]
-        elif opt in conf['confFile'] and conf['confFile'][opt]:
+        elif (opt in conf['confFile']) and (conf['confFile'][opt] is not None):
             conf[opt] = conf['confFile'][opt]
         else:
             conf[opt] = DEFAULTS[opt]
