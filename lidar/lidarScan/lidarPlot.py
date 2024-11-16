@@ -8,36 +8,41 @@
 '''
 
 from functools import partial
+import logging
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
+import signal
 from time import sleep
 
 import lidar
 
-import pdb
+#import pdb  ## pdb.set_trace()
+
+scanner = None
 
 
-class Animator:
-    def __init__(self, ax, scanner):
-        self.ax = ax
-        self.scanner = scanner
-        self.scatter = ax.plot([], [], 'ro')[0]  # red dots
+def stop():
+    if scanner:
+        scanner.done()
+    logging.debug("Stopped")
+    exit(1)
 
-    def init(self):
-        self.scatter.set_data([], [])
-        return self.scatter
+def update(frame, axes, device):
+    # clear the axes and replot
+    angles, distances = device.scan()
+    axes.clear()
+    axes.plot(angles, distances, 'o-', label='Points')
 
-    def update(self, frame):
-        # clear the axes and replot
-        angles, distances = self.scanner.scan()
-        self.ax.clear()
-        self.ax.scatter(angles, distances)
-        ##self.ax.plot(angles, distances, 'o-', label='Points')
+    # set rmax to be slightly larger than the max distance
+    axes.set_rmax(4)  #### FIXME
+    axes.set_title(f"Real-time Radial Plot (Frame {frame})")
 
-        # set rmax to be slightly larger than the max distance
-        self.ax.set_ylim(0, max(max(distances), 10))
-        self.ax.set_title(f"Real-time Radial Plot (Frame {frame})")
+'''
+lidar_polar = plt.subplot(polar=True)
+lidar_polar.autoscale_view(True,True,True)
+lidar_polar.grid(True)
+'''
 
 def getOpts():
     def signalHandler(sig, frame):
@@ -48,25 +53,26 @@ def getOpts():
             #### TODO stop, reload, and restart everything
         elif sig == signal.SIGINT:
             logging.info("SIGINT")
-            for vin in cmdQs:
-                logging.debug(f"Stopping: {vin}")
-                cmdQs[vin].put("STOP")
-    options = {'confs': {'numFrames': 10, 'delay': 100}}  #### FIXME
+            stop()
+
+    signal.signal(signal.SIGHUP, signalHandler)
+    signal.signal(signal.SIGINT, signalHandler)
+
+    options = {'confs': {'numFrames': 25, 'delay': 100}}  #### FIXME
     return options
 
 def run(options):
     scanner = lidar.Lidar()
     if scanner:
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-        animator = Animator(ax, scanner)
         numFrames = options['confs']['numFrames']
         delay = options['confs']['delay']
-
-        ##pdb.set_trace()
-        ani = FuncAnimation(fig, func=animator.update, init_func=animator.init,
-                            frames=numFrames, interval=delay, blit=False)
+        ani = FuncAnimation(fig, update, fargs=(ax, scanner),
+                            frames=numFrames, interval=delay,
+                            blit=False, repeat=True)
         plt.show()
-    scanner.done()
+    plt.close()
+    stop()
 
 
 if __name__ == '__main__':
