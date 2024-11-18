@@ -9,6 +9,7 @@ pillow
 pip
 pyparsing
 python-dateutil
+pytimedinput
 pyyaml
 six
 ydlidar
