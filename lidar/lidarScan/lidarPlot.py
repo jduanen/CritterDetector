@@ -10,6 +10,7 @@
 #import os
 
 import argparse
+from datetime import datetime
 from functools import partial
 import json
 import logging
@@ -24,7 +25,7 @@ import yaml
 
 import lidar
 
-#import pdb  ## pdb.set_trace()
+import pdb  ## pdb.set_trace()
 
 
 DEFAULTS = {
@@ -39,12 +40,14 @@ DEFAULTS = {
     "maxRange": 16.0,    # meters
     "minRange": 0.02,    # meters
     "sampleRate": 4,     # K samples/sec
-    "numScans": 100,     # number of scans to make before exiting
+    "numScans": None,    # number of scans to make before exiting, None=loop
+    "logData": None,
     "version": lidar.LIDAR_VERSION
 }
 
 
 scanner = None
+numFrames = 0
 
 
 def stop():
@@ -70,6 +73,8 @@ lidar_polar.grid(True)
 '''
 
 def getOpts():
+    global numFrames
+
     def signalHandler(sig, frame):
         ''' Catch SIGHUP to force a restart and SIGINT to stop.""
         '''
@@ -82,7 +87,7 @@ def getOpts():
                 _lidar.done()
             exit(1)
 
-    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>]"
+    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>] [-d <dataLogFile>]"
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "-c", "--configsFile", action="store", type=str,
@@ -93,6 +98,9 @@ def getOpts():
     ap.add_argument(
         "-a", "--minAngle", action="store", type=float,
         help="Minimum scan angle (degrees)")
+    ap.add_argument(
+        "-d", "--logData", action="store", type=str,
+        help="Path to file into which sample data is to be written (create if doesn't exist)")
     ap.add_argument(
         "-f", "--scanFreq", action="store", type=float,
         help="Scan Frequency (Hz)")
@@ -162,7 +170,6 @@ def getOpts():
         _configSelect(opt)
 
     if cliOpts['verbose'] > 2:
-        print("CONF2")
         json.dump(conf, sys.stdout, indent=4, sort_keys=True)
         print("")
 
@@ -171,18 +178,43 @@ def getOpts():
     else:
         logging.basicConfig(level=conf['logLevel'])
 
+    if conf['logData']:
+        if not os.path.exists(conf['logData']):
+            conf['logDataFd'] = open(conf['logData'], 'a')
+        else:
+            conf['logDataFd'] = open(conf['logData'], 'w')
+        print("\n--------\n", file=conf['logDataFd'])
+        print(f"[{datetime.now()}]\n", file=conf['logDataFd'])
+
+    if conf['numScans'] is None:
+        conf['numScans'] = 10000000   #### FIXME
+        numFrames = 0
+    else:
+        numFrames = conf['numScans']
+
     signal.signal(signal.SIGHUP, signalHandler)
     signal.signal(signal.SIGINT, signalHandler)
     return conf
+
+def onAnimationEnd():
+    global numFrames
+
+    if numFrames > 0:
+        numFrames -= 1
+        print(numFrames)
+        if numFrames <= 0:
+            input(">")
+            plt.close()
+            sys.exit()
 
 def run(options):
     scanner = lidar.Lidar(**options)
     if scanner:
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
         ani = FuncAnimation(fig, update, fargs=(ax, scanner),
-                            frames=options['numScans'],
-                            interval=100,    #### FIXME make a function of scan frequency
-                            blit=False, repeat=True)
+                            frames=options['numScans'], interval=(1000 / options['scanFreq']),
+                            blit=False, repeat=(options['numScans'] == 0))
+        ani.event_source.add_callback(onAnimationEnd)
         plt.show()
     plt.close()
     stop()
