@@ -100,7 +100,7 @@ class Lidar():
         if not self.laser:
             exit(1)
 
-    def scan(self):
+    def _scan(self):
         self.laserScan = ydlidar.LaserScan()
         if not self.laser.doProcessSimple(self.laserScan):
             logging.error("Scan processing failed")
@@ -111,8 +111,16 @@ class Lidar():
         if not ydlidar.os_isOk():
             logging.error("Laser not OK")
             return None
+
+    def scan(self):
+        self._scan()
         angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points])
         return angles, distances
+
+    def scanIntensity(self):
+        self._scan()
+        angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points])
+        return angles, distances, intensity
 
     '''
     def info(self):
