@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
 import os
+from pytimedinput import timedInput
 import signal
 import sys
 from time import sleep
@@ -62,7 +63,7 @@ def stop():
 
 def update(frame, axes, device):
     # clear the axes and replot
-    angles, distances = device.scan()
+    angles, distances, intensities = device.scanIntensity()
     axes.clear()
     axes.plot(angles, distances, 'o-', label='Points')
 
@@ -70,7 +71,7 @@ def update(frame, axes, device):
         if logDataFd.tell() > 2:
             print(",", file=logDataFd)
         print(f"  {{\"sampleTime\": \"{datetime.now()}\", ", file=logDataFd)
-        print(f"   \"data\": {[[a, d] for a, d in zip(angles, distances)]} }}", end="", file=logDataFd)
+        print(f"   \"data\": {[[a, d, i] for a, d, i in zip(angles, distances, intensities)]} }}", end="", file=logDataFd)
 
     # set rmax to be slightly larger than the max distance
     axes.set_rmax(max(max(distances), 2))  #### FIXME
@@ -82,7 +83,9 @@ def onAnimationEnd():
     if numFrames > 0:
         numFrames -= 1
         if numFrames <= 0:
-            input("> ")  #### FIXME give a prompt?
+            inputStr, timedOut = timedInput("> ", timeout=5)
+            while not timedOut and (inputStr and (inputStr[0] != 'q')):
+                inputStr, timedOut = timedInput("> ", timeout=5)
             plt.close()
             stop()
             sys.exit()
