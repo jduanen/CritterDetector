@@ -167,12 +167,18 @@ class Lidar():
         self.scanFreq = scanFreq
         self.laser.setlidaropt(ydlidar.LidarPropScanFrequency, self.scanFreq)
 
+    def getScanFreq(self):
+        return self.scanFreq
+
     def setSampleRate(self, sampleRate):
         if (sampleRate > MAX_SAMPLE_RATE) or (sampleRate < MIN_SAMPLE_RATE):
             logging.error(f"Invalid sample rate ({sampleRate})")
             return
         self.sampleRate = sampleRate
         self.laser.setlidaropt(ydlidar.LidarPropSampleRate, self.sampleRate)
+
+    def getSampleRate(self):
+        return self.sampleRate
 
     def done(self):
         self.laser.turnOff()
