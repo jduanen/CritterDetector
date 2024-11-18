@@ -48,19 +48,30 @@ DEFAULTS = {
 
 scanner = None
 numFrames = 0
+logDataFd = None
 
 
 def stop():
     if scanner:
         scanner.done()
+    if logDataFd:
+        print("]", file=logDataFd)
+        logDataFd.close()
     logging.debug("Stopped")
     exit(1)
 
 def update(frame, axes, device):
+    global logDataFd
+
     # clear the axes and replot
     angles, distances = device.scan()
     axes.clear()
     axes.plot(angles, distances, 'o-', label='Points')
+
+    if logDataFd.tell() > 2:
+        print(",", file=logDataFd)
+    print(f"  {{\"sampleTime\": \"{datetime.now()}\", ", file=logDataFd)
+    print(f"   \"data\": {[[a, d] for a, d in zip(angles, distances)]} }}", end="", file=logDataFd)
 
     # set rmax to be slightly larger than the max distance
     axes.set_rmax(max(max(distances), 2))  #### FIXME
@@ -73,7 +84,7 @@ lidar_polar.grid(True)
 '''
 
 def getOpts():
-    global numFrames
+    global numFrames, logDataFd
 
     def signalHandler(sig, frame):
         ''' Catch SIGHUP to force a restart and SIGINT to stop.""
@@ -83,8 +94,7 @@ def getOpts():
             logging.error("FIXME: TBD")
         elif sig == signal.SIGINT:
             logging.info("SIGINT")
-            if _lidar:
-                _lidar.done()
+            stop()
             exit(1)
 
     usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>] [-d <dataLogFile>]"
@@ -179,12 +189,11 @@ def getOpts():
         logging.basicConfig(level=conf['logLevel'])
 
     if conf['logData']:
-        if not os.path.exists(conf['logData']):
-            conf['logDataFd'] = open(conf['logData'], 'a')
-        else:
-            conf['logDataFd'] = open(conf['logData'], 'w')
-        print("\n--------\n", file=conf['logDataFd'])
-        print(f"[{datetime.now()}]\n", file=conf['logDataFd'])
+        if os.path.exists(conf['logData']):
+            logging.error(f"Log data file already exists: {conf['logData']}")
+            exit(1)
+        logDataFd = open(conf['logData'], 'w')
+        print("[", file=logDataFd)
 
     if conf['numScans'] is None:
         conf['numScans'] = 10000000   #### FIXME
@@ -196,6 +205,7 @@ def getOpts():
     signal.signal(signal.SIGINT, signalHandler)
     return conf
 
+#### FIXME
 def onAnimationEnd():
     global numFrames
 
@@ -205,6 +215,7 @@ def onAnimationEnd():
         if numFrames <= 0:
             input(">")
             plt.close()
+            stop()
             sys.exit()
 
 def run(options):
