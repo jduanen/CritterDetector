@@ -61,7 +61,7 @@ def stop():
     logging.debug("Stopped")
     exit(1)
 
-def update(frame, axes, device):
+def update(frame, axes, device, maxDistance):
     # clear the axes and replot
     angles, distances, intensities = device.scanIntensity()
     axes.clear()
@@ -74,7 +74,7 @@ def update(frame, axes, device):
         print(f"   \"data\": {[[a, d, i] for a, d, i in zip(angles, distances, intensities)]} }}", end="", file=logDataFd)
 
     # set rmax to be slightly larger than the max distance
-    axes.set_rmax(max(max(distances), 2))  #### FIXME
+    axes.set_rmax(maxDistance)
     axes.set_title(f"Real-time Radial Plot (Frame {frame})")
 
 def onAnimationEnd():
@@ -216,7 +216,7 @@ def run(options):
     scanner = lidar.Lidar(**options)
     if scanner:
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-        ani = FuncAnimation(fig, update, fargs=(ax, scanner),
+        ani = FuncAnimation(fig, update, fargs=(ax, scanner, options['maxRange']),
                             frames=options['numScans'], interval=(1000 / options['scanFreq']),
                             blit=False, repeat=(options['numScans'] == 0))
         ani.event_source.add_callback(onAnimationEnd)
