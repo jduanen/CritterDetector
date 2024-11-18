@@ -61,27 +61,31 @@ def stop():
     exit(1)
 
 def update(frame, axes, device):
-    global logDataFd
-
     # clear the axes and replot
     angles, distances = device.scan()
     axes.clear()
     axes.plot(angles, distances, 'o-', label='Points')
 
-    if logDataFd.tell() > 2:
-        print(",", file=logDataFd)
-    print(f"  {{\"sampleTime\": \"{datetime.now()}\", ", file=logDataFd)
-    print(f"   \"data\": {[[a, d] for a, d in zip(angles, distances)]} }}", end="", file=logDataFd)
+    if logDataFd:
+        if logDataFd.tell() > 2:
+            print(",", file=logDataFd)
+        print(f"  {{\"sampleTime\": \"{datetime.now()}\", ", file=logDataFd)
+        print(f"   \"data\": {[[a, d] for a, d in zip(angles, distances)]} }}", end="", file=logDataFd)
 
     # set rmax to be slightly larger than the max distance
     axes.set_rmax(max(max(distances), 2))  #### FIXME
     axes.set_title(f"Real-time Radial Plot (Frame {frame})")
 
-'''
-lidar_polar = plt.subplot(polar=True)
-lidar_polar.autoscale_view(True,True,True)
-lidar_polar.grid(True)
-'''
+def onAnimationEnd():
+    global numFrames
+
+    if numFrames > 0:
+        numFrames -= 1
+        if numFrames <= 0:
+            input("> ")  #### FIXME give a prompt?
+            plt.close()
+            stop()
+            sys.exit()
 
 def getOpts():
     global numFrames, logDataFd
@@ -204,19 +208,6 @@ def getOpts():
     signal.signal(signal.SIGHUP, signalHandler)
     signal.signal(signal.SIGINT, signalHandler)
     return conf
-
-#### FIXME
-def onAnimationEnd():
-    global numFrames
-
-    if numFrames > 0:
-        numFrames -= 1
-        print(numFrames)
-        if numFrames <= 0:
-            input(">")
-            plt.close()
-            stop()
-            sys.exit()
 
 def run(options):
     scanner = lidar.Lidar(**options)
