@@ -122,6 +122,13 @@ class Lidar():
         angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points])
         return angles, distances, intensity
 
+    def scanInfo(self):
+        self._scan()
+        angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points])
+        return {'angles': angles, 'minAngles': min(angles), 'maxAngles': max(angles),
+                'distances': distances, 'minDistances': min(distances), 'maxDistances': max(distances),
+                'intensity': intensity, 'minIntensity': min(intensity), 'maxIntensity': max(intensity)}
+
     '''
     def info(self):
         if not self.laser:
