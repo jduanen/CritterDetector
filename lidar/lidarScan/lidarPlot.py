@@ -43,6 +43,7 @@ DEFAULTS = {
     "sampleRate": 4,     # K samples/sec
     "numScans": None,    # number of scans to make before exiting, None=loop
     "logData": None,
+    "filter": None,
     "zeroFilter": False,
     "version": lidar.LIDAR_VERSION
 }
@@ -62,9 +63,14 @@ def stop():
     logging.debug("Stopped")
     exit(1)
 
-def update(frame, axes, device, maxDistance):
+def getPoints():
+    angles, distances, intensities = scanner.scanIntensity()
+    #### TODO do filtering here
+    return angles, distances, intensities
+
+def update(frame, axes, maxDistance):
     # clear the axes and replot
-    angles, distances, intensities = device.scanIntensity()
+    angles, distances, intensities = getPoints()
     axes.clear()
     axes.plot(angles, distances, 'o-', label='Points')
 
@@ -74,7 +80,6 @@ def update(frame, axes, device, maxDistance):
         print(f"  {{\"sampleTime\": \"{datetime.now()}\", ", file=logDataFd)
         print(f"   \"data\": {[[a, d, i] for a, d, i in zip(angles, distances, intensities)]} }}", end="", file=logDataFd)
 
-    # set rmax to be slightly larger than the max distance
     axes.set_rmax(maxDistance)
     axes.set_title(f"Real-time Radial Plot (Frame {frame})")
 
@@ -105,7 +110,7 @@ def getOpts():
             stop()
             exit(1)
 
-    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>] [-d <dataLogFile>] [-z <filterZeros>]"
+    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>] [-d <dataLogFile>] [-F <filterNum>] [-z <filterZeros>]"
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "-c", "--configsFile", action="store", type=str,
@@ -119,6 +124,9 @@ def getOpts():
     ap.add_argument(
         "-d", "--logData", action="store", type=str,
         help="Path to file into which sample data is to be written (create if doesn't exist)")
+    ap.add_argument(
+        "-F", "--filter", action="store", type=int,
+        help="Filter the given number of scans (int)")
     ap.add_argument(
         "-f", "--scanFreq", action="store", type=float,
         help="Scan Frequency (Hz)")
@@ -217,10 +225,12 @@ def getOpts():
     return conf
 
 def run(options):
+    global scanner
+
     scanner = lidar.Lidar(**options)
     if scanner:
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-        ani = FuncAnimation(fig, update, fargs=(ax, scanner, options['maxRange']),
+        ani = FuncAnimation(fig, update, fargs=(ax, options['maxRange']),
                             frames=options['numScans'], interval=(1000 / options['scanFreq']),
                             blit=False, repeat=(options['numScans'] == 0))
         ani.event_source.add_callback(onAnimationEnd)
