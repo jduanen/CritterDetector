@@ -65,6 +65,7 @@ class Lidar():
         self.minAngle = kwargs.get('minAngle', DEF_MIN_ANGLE)
         self.maxRange = kwargs.get('maxRange', DEF_MAX_RANGE)
         self.minRange = kwargs.get('minRange', DEF_MIN_RANGE)
+        self.zeroFilter = kwargs.get('zeroFilter', False)
         self.laserScan = None
 
         ydlidar.os_init()
@@ -114,20 +115,13 @@ class Lidar():
 
     def scan(self):
         self._scan()
-        angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points])
+        angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
         return angles, distances
 
     def scanIntensity(self):
         self._scan()
-        angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points])
+        angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
         return angles, distances, intensity
-
-    def scanInfo(self):
-        self._scan()
-        angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points])
-        return {'angles': angles, 'minAngles': min(angles), 'maxAngles': max(angles),
-                'distances': distances, 'minDistances': min(distances), 'maxDistances': max(distances),
-                'intensity': intensity, 'minIntensity': min(intensity), 'maxIntensity': max(intensity)}
 
     '''
     def info(self):
