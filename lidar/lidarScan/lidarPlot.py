@@ -43,6 +43,7 @@ DEFAULTS = {
     "sampleRate": 4,     # K samples/sec
     "numScans": None,    # number of scans to make before exiting, None=loop
     "logData": None,
+    "zeroFilter": False,
     "version": lidar.LIDAR_VERSION
 }
 
@@ -104,7 +105,7 @@ def getOpts():
             stop()
             exit(1)
 
-    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>] [-d <dataLogFile>]"
+    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-i] [-L <logLevel>] [-l <logFile>] [-p <portPath>] [-f <scanFreq>] [-s <sampleRate>] [-a <minAngle>] [-A <maxAngle>] [-r <minRange>] [-R <maxRange>] [-n <numScans>] [-d <dataLogFile>] [-z <filterZeros>]"
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "-c", "--configsFile", action="store", type=str,
@@ -145,7 +146,10 @@ def getOpts():
        help="Path to location of logfile (create it if it doesn't exist)")
     ap.add_argument(
         "-v", "--verbose", action="count", default=0,
-        help="print debug info")
+        help="Print debug info")
+    ap.add_argument(
+        "-z", "--zeroFilter", action="store_true",
+        help="Enable filtering of zero-distance samples")
     cliOpts = ap.parse_args().__dict__
 
     conf = {'version': lidar.LIDAR_VERSION, 'cli': cliOpts, 'confFile': {}, 'config': {}}
