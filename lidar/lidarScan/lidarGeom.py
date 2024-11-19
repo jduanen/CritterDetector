@@ -8,24 +8,25 @@ import lidar
 
 fig = None
 ax = None
+scanner = None
 
-scanner = lidar.Lidar(zeroFilter=True)
+def init():
+    global scanner
+    scanner = lidar.Lidar(zeroFilter=True)
 
-
-def polarToCartesian(r, theta):
+def polarToCartesian(theta, r):
     x = r * np.cos(theta)
     y = r * np.sin(theta)
     return x, y
 
 def scan():
     angles, distances, intensities = scanner.scanIntensity()
-    polarCoords = [[r, theta] for r, theta in zip(distances, angles)]
-    cartCoords = [polarToCartesian(r, theta) for theta, r in zip(angles, distances)]
+    polarCoords = [[theta, r] for theta, r in zip(angles, distances)]
+    cartCoords = [polarToCartesian(theta, r) for theta, r in zip(angles, distances)]
     return polarCoords, cartCoords
 
 def polarPlot(polarCoords, color):
     global fig, ax
-
     angles, distances = zip(*polarCoords)
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
     ax.plot(angles, distances, 'o-', label='Points', color=color)
@@ -33,7 +34,6 @@ def polarPlot(polarCoords, color):
 
 def cartPlot(cartCoords, color):
     global fig, ax
-
     x, y = zip(*cartCoords)
     fig, ax = plt.subplots()
     ax.plot(x, y, 'o-', label='Points', color=color)
@@ -73,8 +73,19 @@ def intersect(num=1):
             poly = union_all([poly, p])
         else:
             poly = Polygon(cartCoords)
+        break
     return poly
 
+def stop():
+    if scanner:
+        scanner.done()
+    print("Stopped")
+    exit(1)
+
+def update(frame, ax, foo):
+    polarCoords, cartCoords = scan()
+    x, y = zip(*cartCoords)
+    ax.plot(list(x), list(y), 'o', color='cyan')
 
 def plot(tol, num):
     fig, ax = plt.subplots()
@@ -101,5 +112,9 @@ def plot(tol, num):
     ax.plot(x, y, 'o-', color='blue')
     ax.fill(x, y, alpha=0.3, color='gray')
 
+    # show realtime scans
+    ani = FuncAnimation(fig, update, fargs=(ax, 1), frames=10000000,
+                        interval=(1000 / scanner.scanFreq),
+                        blit=False, repeat=True)
     plt.show()
-
+    stop()
