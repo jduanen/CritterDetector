@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from shapely import union_all
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 import numpy as np
 import lidar
 
@@ -120,12 +120,6 @@ def plot(tol, num):
                         blit=False, repeat=True)
     plt.show()
 
-def getRef(tol=0.02, num=50):
-    poly = intersect(num)
-    if tol:
-        poly = poly.simplify(tolerance=tol)
-    return poly
-
 minDiff = 10000
 maxDiff = 0
 avgDiff = 0
@@ -155,13 +149,12 @@ def detect(margin=-0.0025, tol=0.02, num=50):
     fig, ax = plt.subplots()
 
     # get reference area and plot it
-    poly = getRef(tol, num)
-    if False:
-        xy = poly.exterior.coords
-        x, y = zip(*xy)
-        ax.plot(x, y, 'o-', color='red')
-        ax.fill(x, y, alpha=0.3, color='gray')
-    refPoly = poly.buffer(margin)
+    refPoly = MultiPolygon()
+    while refPoly.geom_type != 'Polygon':
+        poly = intersect(num)
+        if tol:
+            poly = poly.simplify(tolerance=tol)
+        refPoly = poly.buffer(margin)
     refArea = refPoly.area
     print(f"Ref Area: {refArea}")
     xy = refPoly.exterior.coords
@@ -175,6 +168,13 @@ def detect(margin=-0.0025, tol=0.02, num=50):
                         blit=False, repeat=True)
     plt.show()
 
+'''
++def getRef(tol=0.02, num=50):
++    poly = intersect(num)
++    if tol:
++        poly = poly.simplify(tolerance=tol)
++    return poly
+'''
 
 TEST = 1
 
