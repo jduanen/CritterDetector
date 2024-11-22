@@ -15,10 +15,6 @@ EPSILON = 0.0000001
 MAX_MARGIN = 0.5
 MIN_MARGIN = -0.5
 
-coords = [[-4,-4], [4,-4], [4,4], [-4,4]]
-poly = Polygon(coords)
-xy = poly.exterior.coords
-xSamples, ySamples = zip(*xy)
 
 minRange = lidar.MIN_RANGE
 maxRange = lidar.MAX_RANGE
@@ -29,11 +25,18 @@ lastAngles = [minAngle, maxAngle]
 maxMargin = MAX_MARGIN
 minMargin = MIN_MARGIN
 
+coords = [[0,1], [0.5,-1], [-0.5,-1], [0,1]]
+poly = Polygon(coords)
+xy = poly.exterior.coords
+xSamples, ySamples = zip(*xy)
+
+fig = go.Figure()
+
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-#### TODO
-####  * real-time scans on/off button, or just outside range
+#### TODO move layout stuff out of 'controls' and into 'app.layout'
+
 controls = dbc.Card(
     [
         html.H5("Scan Region"),
@@ -161,8 +164,16 @@ app.layout = dbc.Container(
         html.Hr(),
         dbc.Row(
             [
-                dbc.Col(dcc.Graph(id="samplePoints"), md=8),
-                dbc.Col(controls, md=4)
+                dbc.Col(dcc.Graph(id="lidarDisplay",
+                                  figure=fig,
+                                  responsive=True,
+                                  style={'width': '90vh', 'height': '90vh'})), #, md=8),
+            ],
+            align="center",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(controls), #, md=4)
             ],
             align="center",
         ),
@@ -171,7 +182,7 @@ app.layout = dbc.Container(
 )
 
 @app.callback(
-    Output("samplePoints", "figure"),
+    Output("lidarDisplay", "figure"),
     Input("lidarMargins", "value"),
     Input("intersectFrames", "n_clicks"),
     Input("lidarRanges", "value"),
@@ -203,15 +214,15 @@ def updateScanRegion(margins, numClicks, ranges, angles, options, intensity, num
                 x=xSamples,
                 y=ySamples,
                 mode="markers",
-                marker={"size": 8},
+                #marker={"size": 8},
                 fill="toself"
             )
         ],
         layout={
-#            "xaxis": {"title": "X"},
-#            "yaxis": {"title": "Y"},
+            "xaxis": {"scaleanchor": "y", "scaleratio": 1, "constrain": "range"},
+            "yaxis": {"scaleanchor": "x", "scaleratio": 1, "constrain": "range"},
             "xaxis_range": [-ranges[1], ranges[1]],
-            "yaxis_range": [-ranges[1], ranges[1]]
+            "yaxis_range": [-ranges[1], ranges[1]],
         }
     )
     return fig
