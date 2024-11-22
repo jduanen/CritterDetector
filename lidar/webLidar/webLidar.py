@@ -2,6 +2,7 @@
 
 import dash_bootstrap_components as dbc
 from dash import Dash, html, dash_table, dcc, callback, Output, Input
+import dash_daq as daq
 import plotly.graph_objs as go
 from shapely import union_all
 from shapely.geometry import Polygon, MultiPolygon
@@ -99,7 +100,7 @@ controls = dbc.Card(
         html.Div(
             [
                 dbc.Button(
-                    id="integrateFrames",
+                    id="numberOfFrames",
                     children="Number of Frames",
                     n_clicks=0,
                     size="sm",
@@ -124,7 +125,31 @@ controls = dbc.Card(
         html.H5("Display Options"),
         html.Div(
             [
-                dbc.Label("Margins", align="center"),
+                dcc.Checklist(
+                    options=[
+                        {"label": "samples", "value": 0},
+                        {"label": "margins", "value": 1},
+                        {"label": "region", "value": 2},
+                    ],
+                    inline=True,
+                    value=[0, 1],
+                    inputStyle={"margin-right": "5px"},
+                    labelStyle={"margin-right": "20px"},
+                    id="displayOptions",
+                ),
+            ]
+        ),
+        html.Div(
+            [
+                dbc.Label("Sample Intensity Enable", align="left", size="md"),
+                daq.ToggleSwitch(
+                    id="intensityPB",
+                    value=False,
+                    color="lightblue",
+                    #label="Sample Intensity Enable",
+                    #labelPosition="left",
+                ),
+                html.Div(id="pbResult")
             ],
         ),
     ],
@@ -185,6 +210,16 @@ if __name__ == '__main__':
     app.run_server(debug=True, port=8050)
 
 '''
+
+
+@callback(
+    Output('toggle-switch-output', 'children'),
+    Input('my-toggle-switch', 'value')
+)
+def update_output(value):
+    return f'The switch is {"on" if value else "off"}.'
+
+
 vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 #### TODO make a small bitmap/icon of a triangle pointing up, corresponding to the mark on the lidar device top
 
