@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import dash_bootstrap_components as dbc
-from dash import Dash, html, dash_table, dcc, callback, ctx, Output, Input
+from dash import Dash, html, dash_table, dcc, callback, ctx, Input, Output, State
 import dash_daq as daq
 import plotly.graph_objs as go
 from shapely import union_all
@@ -98,8 +98,8 @@ controls = dbc.Card(
         html.Div(
             [
                 dbc.Button(
-                    id="numberOfFrames",
-                    children="Number of Frames",
+                    id="intersectFrames",
+                    children="Intersect Frames",
                     n_clicks=0,
                     size="sm",
                     #style={"font-size": "1.6rem"},
@@ -173,17 +173,18 @@ app.layout = dbc.Container(
 @app.callback(
     Output("samplePoints", "figure"),
     Input("lidarMargins", "value"),
-    Input("numberOfFrames", "value"),
+    Input("intersectFrames", "n_clicks"),
     Input("lidarRanges", "value"),
     Input("lidarAngles", "value"),
     Input("displayOptions", "value"),
-    Input("intensityPB", "value")
+    Input("intensityPB", "value"),
+    State("numFrames", "value"),
 )
-def updateScanRegion(margins, numFrames, ranges, angles, options, intensity):
+def updateScanRegion(margins, numClicks, ranges, angles, options, intensity, numFrames):
     global lastRanges, lastAngles
 
     print(f"margins: {margins}")
-    print(f"numFrames: {numFrames}")
+    print(f"numClicks: {numClicks}, numFrames: {numFrames}")
 
     if ranges and (ranges != lastRanges):
         print(f"minR: {ranges[0]}, maxR: {ranges[1]}")
