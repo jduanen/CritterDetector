@@ -37,25 +37,7 @@ app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 ####  * real-time scans on/off button, or just outside range
 controls = dbc.Card(
     [
-        html.Div(
-            [
-                dbc.Label("Margins", align="center"),
-                #### TODO consider setting 'updatemode="drag"'
-                dcc.RangeSlider(
-                    id="lidarMargins",
-                    min=MIN_MARGIN,
-                    max=MAX_MARGIN,
-                    step=0.01,
-                    count=2,
-                    pushable=0.01,
-                    value=[minMargin, maxMargin],
-                    marks={minMargin: f"{minMargin}", 0.0: "0.0", maxMargin: f"{maxMargin}"},
-                    allowCross=False,
-                    drag_value=None,
-                    tooltip={"placement": "bottom", "always_visible": True}
-                )
-            ]
-        ),
+        html.H5("Scan Region"),
         html.Div(
             [
                 dbc.Label("Ranges", align="center"),
@@ -93,11 +75,57 @@ controls = dbc.Card(
                 )
             ]
         ),
+        html.Hr(),
+        html.H5("Reference Region"),
         html.Div(
             [
-                dbc.Label("Sample points count"),
-                dbc.Input(id="pointsCount", type="number", value=len(xSamples))
+                dbc.Label("Margins", align="center"),
+                #### TODO consider setting 'updatemode="drag"'
+                dcc.RangeSlider(
+                    id="lidarMargins",
+                    min=MIN_MARGIN,
+                    max=MAX_MARGIN,
+                    step=0.01,
+                    count=2,
+                    pushable=0.01,
+                    value=[minMargin, maxMargin],
+                    marks={minMargin: f"{minMargin}", 0.0: "0.0", maxMargin: f"{maxMargin}"},
+                    allowCross=False,
+                    drag_value=None,
+                    tooltip={"placement": "bottom", "always_visible": True}
+                )
             ]
+        ),
+        html.Div(
+            [
+                dbc.Button(
+                    id="integrateFrames",
+                    children="Number of Frames",
+                    n_clicks=0,
+                    size="sm",
+                    #style={"font-size": "1.6rem"},
+                    color="primary",
+                    className="me-1",
+                ),
+                dcc.Input(
+                    id="numFrames",
+                    type="number",
+                    min=0,
+                    max=1000,
+                    step=1,
+                    value=50,
+                    size="sm",
+                    #style={"font-size": "1.6rem"},
+                    className="mb-3",
+                ),
+            ]
+        ),
+        html.Hr(),
+        html.H5("Display Options"),
+        html.Div(
+            [
+                dbc.Label("Margins", align="center"),
+            ],
         ),
     ],
     body=True,
@@ -144,13 +172,13 @@ def update(ranges, angles):
             )
         ],
         layout={
+#            "xaxis": {"title": "X"},
+#            "yaxis": {"title": "Y"},
             "xaxis_range": [-ranges[1], ranges[1]],
             "yaxis_range": [-ranges[1], ranges[1]]
         }
     )
     return fig
-#    layout = {"xaxis": {"title": "X"}, "yaxis": {"title": "Y"}}
-#    return go.Figure(data=data, layout=layout)
 
 
 if __name__ == '__main__':
@@ -191,12 +219,10 @@ def change_colorscale(scale):
     return fig
 
 --------
-#### TODO provide option for dark display
+#### TODO add boolean switch for dark/light theme
 
 template="plotly_dark",
 
---------
-#### TODO add boolean switch for dark/light theme
 app.layout = html.Div(
     [
         html.H2("Colour by Type BooleanSwitch Example App"),
@@ -240,7 +266,6 @@ def update_figure(values):
 
 ---------
 #### TODO common or independent callback handlers???? 
-
 
 @app.callback(
     Output("meter", "value"),
