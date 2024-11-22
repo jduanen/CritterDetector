@@ -86,8 +86,8 @@ class Lidar():
         self.laser.setlidaropt(ydlidar.LidarPropIntenstiy, True)
         self.setScanFreq(self.scanFreq)
         self.setSampleRate(self.sampleRate)
-        self.setAngle(self.minAngle, self.maxAngle)
-        self.setRange(self.minRange, self.maxRange)
+        self.setAngles(self.minAngle, self.maxAngle)
+        self.setRanges(self.minRange, self.maxRange)
 
         if not self.laser.initialize():
             self.laser = None
@@ -98,19 +98,32 @@ class Lidar():
         if not ydlidar.os_isOk():
             self.laser = None
             logger.error("Laser is not OK")
+        self.laserScan = ydlidar.LaserScan()
         if not self.laser:
             exit(1)
 
-    def _scan(self):
-        self.laserScan = ydlidar.LaserScan()
-        if not self.laser.doProcessSimple(self.laserScan):
-            logging.error("Scan processing failed")
-            return None
-        if not self.laser.turnOn(): 
-            logging.error("Laser failed to turn on")
-            return None
+    def laserOn(self):
+        if not self.laser.turnOn():
+            logging.error("Failed to turn laser on")
+            return True
         if not ydlidar.os_isOk():
             logging.error("Laser not OK")
+            return True
+        self.laserScan = ydlidar.LaserScan()
+        return False
+
+    def laserOff(self):
+        if not self.laser.turnOff():
+            logging.error("Failed to turn laser off")
+            return True
+        return False
+
+    def _scan(self):
+        if not ydlidar.os_isOk():
+            logging.error("Laser not OK")
+            return None
+        if not self.laser.doProcessSimple(self.laserScan):
+            logging.error("Scan processing failed")
             return None
 
     def scan(self):
@@ -133,7 +146,7 @@ class Lidar():
         return(r)
     '''
 
-    def setAngle(self, minAngle, maxAngle):
+    def setAngles(self, minAngle, maxAngle):
         if (minAngle > MAX_ANGLE) or (minAngle < MIN_ANGLE):
             logging.error(f"Invalid minAngle ({minAngle})")
             return
@@ -151,7 +164,7 @@ class Lidar():
     def getAngles(self):
         return self.maxAngle, self.minAngle
 
-    def setRange(self, minRange, maxRange):
+    def setRanges(self, minRange, maxRange):
         if (minRange > 1000) or (minRange <= 0):    #### FIXME
             logging.error(f"Invalid minRange ({minRange})")
             return
