@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import dash_bootstrap_components as dbc
-from dash import Dash, html, dash_table, dcc, callback, Output, Input
+from dash import Dash, html, dash_table, dcc, callback, ctx, Output, Input
 import dash_daq as daq
 import plotly.graph_objs as go
 from shapely import union_all
@@ -33,8 +33,6 @@ minMargin = MIN_MARGIN
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 #### TODO
-####  * pushbutton and int [0-1000] (# scans)
-####  * margin [<epsilion>-<maxRange>] (meters)
 ####  * real-time scans on/off button, or just outside range
 controls = dbc.Card(
     [
@@ -129,7 +127,8 @@ controls = dbc.Card(
                     options=[
                         {"label": "samples", "value": 0},
                         {"label": "margins", "value": 1},
-                        {"label": "region", "value": 2},
+                        {"label": "outside", "value": 2},
+                        {"label": "region", "value": 3},
                     ],
                     inline=True,
                     value=[0, 1],
@@ -173,11 +172,18 @@ app.layout = dbc.Container(
 
 @app.callback(
     Output("samplePoints", "figure"),
+    Input("lidarMargins", "value"),
+    Input("numberOfFrames", "value"),
     Input("lidarRanges", "value"),
     Input("lidarAngles", "value"),
+    Input("displayOptions", "value"),
+    Input("intensityPB", "value")
 )
-def update(ranges, angles):
+def updateScanRegion(margins, numFrames, ranges, angles, options, intensity):
     global lastRanges, lastAngles
+
+    print(f"margins: {margins}")
+    print(f"numFrames: {numFrames}")
 
     if ranges and (ranges != lastRanges):
         print(f"minR: {ranges[0]}, maxR: {ranges[1]}")
@@ -185,6 +191,10 @@ def update(ranges, angles):
     if angles and (angles != lastAngles):
         print(f"minA: {angles[0]}, maxA: {angles[1]}")
         lastAngles = angles
+
+    print(f"displayOptions: {options}")
+
+    print(f"intensity: {intensity}")
 
     fig = go.Figure(
         data=[
@@ -210,16 +220,6 @@ if __name__ == '__main__':
     app.run_server(debug=True, port=8050)
 
 '''
-
-
-@callback(
-    Output('toggle-switch-output', 'children'),
-    Input('my-toggle-switch', 'value')
-)
-def update_output(value):
-    return f'The switch is {"on" if value else "off"}.'
-
-
 vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 #### TODO make a small bitmap/icon of a triangle pointing up, corresponding to the mark on the lidar device top
 
@@ -274,32 +274,6 @@ app.layout = html.Div(
 def update_output(on):
 
 ---------
-#### TODO make checklist for: margins, current samples, intensity?
-
-options = [{"label": specie.capitalize(), "value": specie} for specie in species]
-
-app = Dash(__name__)
-
-app.layout = html.Div(
-    [
-        dcc.Checklist(
-            options=options,
-            inline=True,
-            value=species,
-            id="checklist",
-        ),
-        dcc.Graph(id="scatter"),
-    ]
-)
-
-
-@app.callback(
-    Output("scatter", "figure"),
-    Input("checklist", "value"),
-)
-def update_figure(values):
-
----------
 #### TODO common or independent callback handlers???? 
 
 @app.callback(
@@ -327,75 +301,6 @@ def sync_input(meter, feet):
     return meter, feet, fig
 
 ---------
-#### TODO pushbutton for integrating new area (with given number of frames)
-
-countdown_input = dcc.Input(
-    id="countdown-input",
-    type="number",
-    min=0,
-    step=1,
-    size="lg",
-    style={"font-size": "1.6rem"},
-    className="mb-3",
-)
-
-button = dbc.Button(
-    id="countdown-button",
-    children="Start Countdown",
-    n_clicks=0,
-    size="lg",
-    style={"font-size": "1.6rem"},
-    color="primary",
-    className="me-1",
-)
-
-app.layout = dbc.Container(
-    [
-        countdown_store,
-        running_countdown_store,
-        interval,
-        audio_div,
-        dbc.Row(
-            [
-                dbc.Col(
-                    [html.H2("Enter countdown in seconds"), countdown_input, button],
-                    lg=6,
-                )
-            ],
-            justify="center",
-            style=dict(textAlign="center"),
-            className="d-flex justify-content-center",
-        ),
-
-@app.callback(
-    Output("countdown-store", "data"),
-    Output("countdown-interval", "n_intervals"),
-    Input("countdown-button", "n_clicks"),
-    State("countdown-input", "value"),
-)
-def init_countdown_store(n_clicks, countdown_input):
-
-    if n_clicks > 0:
-
-        return countdown_input, 0
-
-@app.callback(
-    Output("running-countdown-store", "data"),
-    Input("countdown-store", "data"),
-    Input("countdown-interval", "n_intervals"),
-)
-def init_running_countdown_store(seconds, n_intervals):
-
-    if seconds is not None:
-
-        running_seconds = seconds - n_intervals
-        if running_seconds >= 0:
-            return running_seconds
-        else:
-            return
-
-
----------
 #### TODO consider using dcc.Interval to run scans of lidar device
 
 interval = dcc.Interval(
@@ -403,11 +308,6 @@ interval = dcc.Interval(
 )
 
 use dcc.Store to save state between calls
-
----------
-#### TODO make hover mouse show (distance, intensity) for sample points
-
-
 
 ---------
 #### TODO 
