@@ -32,22 +32,36 @@ import lidar
 
 WS_LIDAR_VERSION = "0.1.0"
 
-DEF_LOG_LEVEL = "WARNING"
+LOG_LEVEL = "DEBUG"
 
 HOSTNAME = "0.0.0.0"
 PORTNUM = 8765
 
 
+async def cmdHandler(websocket):
+    async for message in websocket:
+        msg = json.loads(message)
+        #### parse and process message
+        response = {'msg': 'ACK', 'data': msg['arg'] + 1}
+        await websocket.send(json.dumps(response))
+
+async def main():
+    async with websockets.serve(cmdHandler, HOSTNAME, PORTNUM):
+        await asyncio.Future()  # Run forever
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=LOG_LEVEL)
+    try:
+        logging.debug("Starting Lidar Server")
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.debug("Lidar Server stopped")
+
+'''
 async def sendData(websocket):
     while True:
         data = [(i, float(i)) for i in range(400)]  #### FIXME
         await websocket.send(json.dumps(data))
         await asyncio.sleep(10)  # Send data every 60 seconds
-
-async def main():
-    async with websockets.serve(sendData, HOSTNAME, PORTNUM):
-        await asyncio.Future()  # Run forever
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+'''
