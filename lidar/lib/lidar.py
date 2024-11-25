@@ -131,6 +131,7 @@ class Lidar():
             ret = self.laser.doProcessSimple(self.laserScan)
         print("...")
 
+    #### TODO replace scan() and scanIntensity() with scan(vals)
     def scan(self):
         self._scan()
         angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
@@ -206,6 +207,9 @@ class Lidar():
 
     def getSampleRate(self):
         return self.sampleRate
+
+    def getVersion(self):
+        return LIDAR_VERSION
 
     def done(self):
         self.laser.turnOff()
