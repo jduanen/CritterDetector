@@ -11,8 +11,8 @@
 #    - command: {'type': 'CMD', 'command': <cmd>, <**argKVs>}
 #    - response: {'type': 'RESP', 'cmd': <cmd>, <returnKVs>}
 #  * commands/responses
-#    - Initialize
-#      * {'type': 'CMD', 'command':'init', 'port': <path>", 'baud': <int>,
+#    - Start
+#      * {'type': 'CMD', 'command':'start', 'port': <path>", 'baud': <int>,
 #          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
 #          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
 #          'zeroFilter': <bool>}
@@ -21,20 +21,19 @@
 #      * {'type': 'CMD', 'command': 'stop'}
 #      * {'type': 'RESP', 'success': <bool>}
 #    - Set value(s)
-#      * {'type': 'CMD', 'command': 'set', ['port', 'baud', 'scanFreq', 'sampleRate',
-#          'minAngle', 'maxAngle', 'minRange', 'maxRange', 'zeroFilter']}
-#      * {'type': 'RESP', 'success': <bool>}
+#      * {'type': 'CMD', 'command': 'set', ['scanFreq', 'sampleRate',
+#          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
+#      * {'type': 'RESP', 'success': <bool>, 'results': [<bool>*]}
 #    - Get value(s)
-#      * {'type': 'CMD', 'command': 'get', ['port', 'baud', 'scanFreq', 'sampleRate',
-#          'minAngle', 'maxAngle', 'minRange', 'maxRange', 'zeroFilter']}
-#      * {'type': 'RESP', 'success': <bool>, 'values': ['port': <str>, 'baud': <int>,
-#          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
-#          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
-#          'zeroFilter': <bool>]}
+#      * {'type': 'CMD', 'command': 'get', ['scanFreq', 'sampleRate',
+#          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
+#      * {'type': 'RESP', 'success': <bool>, 'values': ['scanFreq': <Hz>,
+#          'sampleRate': <KHz>, 'minAngle': <degrees>, 'maxAngle': <degrees>,
+#          'minRange': <meters>, 'maxRange': <meters>]}
 #    - Scan
 #      * {'type': 'CMD', 'command': 'scan', 'values': ['angles', 'distances', 'intensities']}
-#      * {'type': 'RESP', 'success': <bool>, 'values': ['angles': <floatList>,
-#          'distances': <intList>, 'intensities': <intList>]}
+#      * {'type': 'RESP', 'success': <bool>, 'values': {'angles': <floatList>,
+#          'distances': <intList>, 'intensities': <intList>}}
 #    - Laser on/off
 #      * {'type': 'CMD', 'command': 'laser', 'enable': <bool>}
 #      * {'type': 'RESP', 'success': <bool>}
@@ -80,9 +79,13 @@ PORTNUM = 8765
 
 PING = 20
 
+GETTERS = {'minAngle': scanner.getAngles, 'maxAngle': scanner.getAngles,
+           'minRange': scanner.getRanges, 'maxRange': scanner.getRanges,
+           'scanFreq': scanner.getScanFreq, 'sampleRate': scanner.getSampleRate}
+
 #### TODO move this to a common location to be shared by clients
 class Commands(Enum):
-    INIT = 'init'
+    START = 'start'
     STOP = 'stop'
     SET = 'set'
     GET = 'get'
@@ -105,65 +108,67 @@ async def cmdHandler(websocket):
         if msg['type'] != 'CMD':
             logging.warning(f"Not a command, ignoring: {msg['type']}")
             response = {'type': 'RESP', 'success': False}
-        elif msg['command'] == Commands.INIT.value:
-            print(f"INIT: {msg}")
-#    - Initialize
-#      * {'type': 'CMD', 'command':'init', 'port': <path>", 'baud': <int>,
-#          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
-#          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
-#          'zeroFilter': <bool>}
-            if True:  #### FIXME
+        elif msg['command'] == Commands.START.value:
+            del msg['type']
+            del msg['command']
+            scanner = lidar.Lidar(msg)
+            if scanner:
                 response = {'type': 'RESP', 'success': True}
             else:
                 response = {'type': 'RESP', 'success': False}
         elif msg['command'] == Commands.STOP.value:
-            print(f"STOP: {msg}")
-#    - Stop
-#      * {'type': 'CMD', 'command': 'stop'}
-#      * {'type': 'RESP', 'success': <bool>}
             if scanner.done():
                 response = {'type': 'RESP', 'success': True}
             else:
                 response = {'type': 'RESP', 'success': False}
         elif msg['command'] == Commands.SET.value:
-            print(f"SET: {msg}")
-#    - Set value(s)
-#      * {'type': 'CMD', 'command': 'set', ['port', 'baud', 'scanFreq', 'sampleRate',
-#          'minAngle', 'maxAngle', 'minRange', 'maxRange', 'zeroFilter']}
-#      * {'type': 'RESP', 'success': <bool>}
-            if True:  #### FIXME
-                response = {'type': 'RESP', 'success': True}
-            else:
-                response = {'type': 'RESP', 'success': False}
+            results = []
+            if 'minAngles' in msg['set'] or 'maxAngles' in msg['set']:
+                angles = scanner.getAngles()
+            if 'minRanges' in msg['set'] or 'maxRanges' in msg['set']:
+                ranges = scanner.getRanges()
+            if 'scanFreq' in msg['set']:
+                results.append(scanner.setScanFreq(msg['set']['scanFreq']))
+            elif 'sampleRate' in msg['set']:
+                results.append(scanner.setSampleRate(msg['set']['sampleRate']))
+            elif 'minAngle' in msg['set']:
+                results.append(scanner.setAngles(msg['set']['minAngle'], angles[1]))
+            elif 'maxAngle' in msg['set']:
+                results.append(scanner.setAngles(angles[0], msg['set']['maxAngle']))
+            elif 'minRange' in msg['set']:
+                results.append(scanner.setRanges(msg['set']['minRange'], ranges[1]))
+            elif 'maxRange' in msg['set']:
+                results.append(scanner.setRanges(ranges[0], msg['set']['minRange'])
+            response = {'type': 'RESP', 'success': True, 'results': results}
         elif msg['command'] == Commands.GET.value:
-            print(f"GET: {msg}")
-#    - Get value(s)
-#      * {'type': 'CMD', 'command': 'get', ['port', 'baud', 'scanFreq', 'sampleRate',
-#          'minAngle', 'maxAngle', 'minRange', 'maxRange', 'zeroFilter']}
-#      * {'type': 'RESP', 'success': <bool>, 'values': ['port': <str>, 'baud': <int>,
-#          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
-#          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
-#          'zeroFilter': <bool>]}
-            if True:  #### FIXME
-                response = {'type': 'RESP', 'success': True}
-            else:
+            if ('get' not in msg) or (msg['get'] is None):
                 response = {'type': 'RESP', 'success': False}
+            else:
+                vals = {}
+                for k in msg['get']:
+                    v = GETTERS[k]()
+                    if k == 'minAngle':
+                        vals[k] = v[0]
+                    elif k == 'maxAngle':
+                        vals[k] = v[1]
+                    elif k == 'minRange':
+                        vals[k] = v[0]
+                    elif k == 'maxRange':
+                        vals[k] = v[1]
+                    elif k in ['scanFreq', 'sampleRate']:
+                        vals[k] = v
+                if vals:
+                    response = {'type': 'RESP', 'success': True, 'get': vals}
+                else:
+                    response = {'type': 'RESP', 'success': False, 'get': None}
         elif msg['command'] == Commands.SCAN.value:
-            print(f"SCAN: {msg}")
-#    - Scan
-#      * {'type': 'CMD', 'command': 'scan', 'values': ['angles', 'distances', 'intensities']}
-#      * {'type': 'RESP', 'success': <bool>, 'values': ['angles': <floatList>,
-#          'distances': <intList>, 'intensities': <intList>]}
-            if True:  #### FIXME
-                response = {'type': 'RESP', 'success': True}
+            points = scanner.scan(msg['values'])
+            if points:
+                response = {'type': 'RESP', 'success': True, 'values': points}
             else:
-                response = {'type': 'RESP', 'success': False}
+                response = {'type': 'RESP', 'success': False, 'values': None}
         elif msg['command'] == Commands.LASER.value:
-            print(f"LASER: {msg}")
-#    - Laser on/off
-#      * {'type': 'CMD', 'command': 'laser', 'enable': <bool>}
-#      * {'type': 'RESP', 'success': <bool>}
-            if True:  #### FIXME
+            if scanner.laserEnable(msg['enable']):
                 response = {'type': 'RESP', 'success': True}
             else:
                 response = {'type': 'RESP', 'success': False}
@@ -181,10 +186,10 @@ async def cmdHandler(websocket):
 
 async def main():
     try:
+        # loop forever
         async with websockets.serve(cmdHandler, HOSTNAME, PORTNUM, ping_interval=PING, ping_timeout=PING):
             future = asyncio.get_running_loop().create_future()
             await future
-#            await asyncio.Future()  # Run forever
     except asyncio.CancelledError:
         print("Future was cancelled, exiting...")
         # Perform any necessary cleanup here
@@ -195,8 +200,6 @@ if __name__ == "__main__":
     logging.debug("Starting Lidar Server")
 
     scanner = lidar.Lidar()
-
-    #### TODO get version and make sure it's consistent with this code
 
     loop = asyncio.get_event_loop()
     try:
