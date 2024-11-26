@@ -212,6 +212,5 @@ class Lidar():
         return LIDAR_VERSION
 
     def done(self):
-        self.laser.turnOff()
-        self.laser.disconnecting()
+        return (not self.laser.turnOff()) or (not self.laser.disconnecting())
 
