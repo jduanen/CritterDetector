@@ -154,37 +154,51 @@ class Lidar():
     '''
 
     def setAngles(self, minAngle, maxAngle):
-        if (minAngle > MAX_ANGLE) or (minAngle < MIN_ANGLE):
-            logging.error(f"Invalid minAngle ({minAngle})")
-            return
-        if (maxAngle > 180.0) or (maxAngle < -180.0):
-            logging.error(f"Invalid maxAngle ({maxAngle})")
-            return
         if minAngle >= maxAngle:
             logging.error(f"Invalid minAngle and maxAngle pair ({minAngle} >= {maxAngle}))")
-            return
-        self.minAngle = minAngle
-        self.maxAngle = maxAngle
-        self.laser.setlidaropt(ydlidar.LidarPropMinAngle, self.minAngle)
-        self.laser.setlidaropt(ydlidar.LidarPropMaxAngle, self.maxAngle)
+            return True
+        return self.setMinAngle(minAngle) or self.setMaxAngle(maxAngle)
+
+    def setMinAngle(self, angle):
+        if (angle > MAX_ANGLE) or (angle < MIN_ANGLE):
+            logging.error(f"Invalid minAngle ({angle})")
+            return True
+        self.minAngle = angle
+        self.laser.setlidaropt(ydlidar.LidarPropMinAngle, self.angle)
+        return False
+
+    def setMaxAngle(self, angle):
+        if (angle > 180.0) or (angle < -180.0):
+            logging.error(f"Invalid maxAngle ({angle})")
+            return True
+        self.maxAngle = angle
+        self.laser.setlidaropt(ydlidar.LidarPropMaxAngle, self.angle)
+        return False
 
     def getAngles(self):
         return self.maxAngle, self.minAngle
 
     def setRanges(self, minRange, maxRange):
-        if (minRange > 1000) or (minRange <= 0):    #### FIXME
-            logging.error(f"Invalid minRange ({minRange})")
-            return
-        if (maxRange > 1000) or (maxRange < 0):    #### FIXME
-            logging.error(f"Invalid maxRange ({maxRange})")
-            return
         if minRange >= maxRange:
             logging.error(f"Invalid minRange and maxRange pair ({minRange} >= {maxRange}))")
-            return
-        self.minRange = minRange
-        self.maxRange = maxRange
+            return True
+        return self.setMinRange(minRange) or self.setMaxRange(maxRange)
+
+    def setMinRange(self, range):
+        if (range > 1000) or (range <= 0):    #### FIXME
+            logging.error(f"Invalid minRange ({range})")
+            return True
+        self.minRange = range
         self.laser.setlidaropt(ydlidar.LidarPropMinRange, self.minRange)
-        self.laser.setlidaropt(ydlidar.LidarPropMaxRange, self.maxRange)
+        return False
+
+    def setMaxRange(self, range):
+        if (range > 1000) or (range < 0):    #### FIXME
+            logging.error(f"Invalid maxRange ({range})")
+            return True
+        self.maxRange = range
+        self.laser.setlidaropt(ydlidar.LidarPropMaxRange, self.range)
+        return False
 
     def getRanges(self):
         return self.maxRange, self.minRange
