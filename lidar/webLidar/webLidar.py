@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+#
+# N.B. Dash is multi-threaded, need to use dcc.Store() objects instead of globals
+#
+
 
 import dash_bootstrap_components as dbc
 from dash import Dash, html, dash_table, dcc, callback, ctx, Input, Output, State
@@ -15,6 +19,10 @@ EPSILON = 0.0000001
 MAX_MARGIN = 0.5
 MIN_MARGIN = -0.5
 
+OPTS_SAMPLE = 0
+OPTS_MARGIN = 1
+OPTS_OUTSIDE = 2
+OPTS_REGION = 3
 
 minRange = lidar.MIN_RANGE
 maxRange = lidar.MAX_RANGE
@@ -25,17 +33,19 @@ lastAngles = [minAngle, maxAngle]
 maxMargin = MAX_MARGIN
 minMargin = MIN_MARGIN
 
+#### TMP TMP TMP
 coords = [[0,1], [0.5,-1], [-0.5,-1], [0,1]]
 poly = Polygon(coords)
 xy = poly.exterior.coords
 xSamples, ySamples = zip(*xy)
 
-fig = go.Figure()
+scanner = None
 
+isLaserOn = False
+
+#fig = go.Figure()
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-
-#### TODO move layout stuff out of 'controls' and into 'app.layout'
 
 controls = dbc.Card(
     [
@@ -128,13 +138,13 @@ controls = dbc.Card(
             [
                 dcc.Checklist(
                     options=[
-                        {"label": "samples", "value": 0},
-                        {"label": "margins", "value": 1},
-                        {"label": "outside", "value": 2},
-                        {"label": "region", "value": 3},
+                        {"label": "samples", "value": OPTS_SAMPLE},
+                        {"label": "margins", "value": OPTS_MARGIN},
+                        {"label": "outside", "value": OPTS_OUTSIDE},
+                        {"label": "region", "value": OPTS_REGION},
                     ],
                     inline=True,
-                    value=[0, 1],
+                    value=[],
                     inputStyle={"margin-right": "5px"},
                     labelStyle={"margin-right": "20px"},
                     id="displayOptions",
@@ -143,15 +153,14 @@ controls = dbc.Card(
         ),
         html.Div(
             [
-                dbc.Label("Sample Intensity Enable", align="left", size="md"),
-                daq.ToggleSwitch(
-                    id="intensityPB",
-                    value=False,
-                    color="lightblue",
-                    #label="Sample Intensity Enable",
-                    #labelPosition="left",
+                dcc.Checklist(
+                    options=[ {"label": "Sample Intensity Enable", "value": 0} ],
+                    inline=True,
+                    value=[],
+                    inputStyle={"margin-right": "5px"},
+                    labelStyle={"margin-right": "20px"},
+                    id="intensityEnb",
                 ),
-                html.Div(id="pbResult")
             ],
         ),
     ],
@@ -164,49 +173,41 @@ app.layout = dbc.Container(
         html.Hr(),
         dbc.Row(
             [
-                dbc.Col(dcc.Graph(id="lidarDisplay",
-                                  figure=fig,
-                                  responsive=True,
-                                  style={'width': '90vh', 'height': '90vh'})), #, md=8),
+                dbc.Col(
+                    dcc.Graph(id="lidarDisplay",
+                        figure=go.Figure(),
+                        responsive=True,
+                        style={'width': '90vh', 'height': '90vh'}
+                    )
+                ),
             ],
             align="center",
+            className='g-0',
         ),
         dbc.Row(
             [
-                dbc.Col(controls), #, md=4)
+                dbc.Col(controls),
             ],
             align="center",
+            className='g-0',
         ),
     ],
     fluid=True,
 )
 
-@app.callback(
-    Output("lidarDisplay", "figure"),
-    Input("lidarMargins", "value"),
-    Input("intersectFrames", "n_clicks"),
-    Input("lidarRanges", "value"),
-    Input("lidarAngles", "value"),
-    Input("displayOptions", "value"),
-    Input("intensityPB", "value"),
-    State("numFrames", "value"),
-)
-def updateScanRegion(margins, numClicks, ranges, angles, options, intensity, numFrames):
-    global lastRanges, lastAngles
 
-    print(f"margins: {margins}")
-    print(f"numClicks: {numClicks}, numFrames: {numFrames}")
+def getSamples():
+    if not scanner:
+        print("NO SAMPLES")
+        return None, None  ##xSamples = ySamples = [(0, 0)]
 
-    if ranges and (ranges != lastRanges):
-        print(f"minR: {ranges[0]}, maxR: {ranges[1]}")
-        lastRanges = ranges
-    if angles and (angles != lastAngles):
-        print(f"minA: {angles[0]}, maxA: {angles[1]}")
-        lastAngles = angles
-
-    print(f"displayOptions: {options}")
-
-    print(f"intensity: {intensity}")
+    angles, distances, intensity = scanner.scanIntensity()
+    polarToCartesian = lambda theta, r: ((r * np.cos(theta)), (r * np.sin(theta)))
+    cartCoords = [polarToCartesian(theta, r) for theta, r in zip(angles, distances)]
+    poly = Polygon(cartCoords)
+    xy = poly.exterior.coords
+    xSamples, ySamples = zip(*xy)
+    print(f"SSSSSS: {len(xSamples)}")
 
     fig = go.Figure(
         data=[
@@ -221,18 +222,74 @@ def updateScanRegion(margins, numClicks, ranges, angles, options, intensity, num
         layout={
             "xaxis": {"scaleanchor": "y", "scaleratio": 1, "constrain": "range"},
             "yaxis": {"scaleanchor": "x", "scaleratio": 1, "constrain": "range"},
-            "xaxis_range": [-ranges[1], ranges[1]],
-            "yaxis_range": [-ranges[1], ranges[1]],
+            "xaxis_range": [-lastRanges[1], lastRanges[1]],
+            "yaxis_range": [-lastRanges[1], lastRanges[1]],
         }
     )
     return fig
+
+@app.callback(
+    Output("lidarDisplay", "figure"),
+    Input("lidarRanges", "value"),
+    Input("lidarAngles", "value"),
+    Input("lidarMargins", "value"),
+    Input("intersectFrames", "n_clicks"),
+    Input("displayOptions", "value"),
+    Input("intensityEnb", "value"),
+    State("numFrames", "value"),
+)
+def update(ranges, angles, margins, intersect, options, intensityEnb, numFrames):
+    global lastRanges, lastAngles, scanner
+
+    if options:
+        scanner = lidar.Lidar(zeroFilter=True)
+    else:
+        scanner = None
+
+    if ranges and (ranges != lastRanges):
+        print(f"minR: {ranges[0]}, maxR: {ranges[1]}")
+        lastRanges = ranges
+        if scanner:
+            scanner.setRanges(ranges[0], ranges[1])
+            print(f"RRRRRR: {scanner.getRanges()[0]}, {scanner.getRanges()[1]}")
+
+    if angles and (angles != lastAngles):
+        print(f"minA: {angles[0]}, maxA: {angles[1]}")
+        lastAngles = angles
+        if scanner:
+            scanner.setAngles(angles[0], angles[1])
+            print(f"AAAAAA: {scanner.getAngles()[0]}, {scanner.getAngles()[1]}")
+
+    print(f"margins: {margins}")
+    print(f"intersect: {intersect}, numFrames: {numFrames}")
+
+    print(f"displayOptions: {options}")
+    fig = None
+    if OPTS_SAMPLE in options:
+        print("SAMPLE")
+        print(f"intensityEnb: {intensityEnb}")
+        fig = getSamples()
+    elif OPTS_MARGIN in options:
+        print("MARGIN")
+    elif OPTS_REGION in options:
+        print("REGION")
+    elif OPTS_OUTSIDE in options:
+        print("OUTSIDE")
+
+    return fig if fig else go.Figure()
 
 
 if __name__ == '__main__':
     app.run_server(debug=True, port=8050)
 
+    #### FIXME this won't work
+#    if scanner:
+#        scanner.done()
+
 '''
 vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+#### TODO think about adding simplify and tolerance button and input box
+
 #### TODO make a small bitmap/icon of a triangle pointing up, corresponding to the mark on the lidar device top
 
 ---------
