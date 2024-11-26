@@ -164,7 +164,7 @@ class Lidar():
             logging.error(f"Invalid minAngle ({angle})")
             return True
         self.minAngle = angle
-        self.laser.setlidaropt(ydlidar.LidarPropMinAngle, self.angle)
+        self.laser.setlidaropt(ydlidar.LidarPropMinAngle, self.minAngle)
         return False
 
     def setMaxAngle(self, angle):
@@ -172,7 +172,7 @@ class Lidar():
             logging.error(f"Invalid maxAngle ({angle})")
             return True
         self.maxAngle = angle
-        self.laser.setlidaropt(ydlidar.LidarPropMaxAngle, self.angle)
+        self.laser.setlidaropt(ydlidar.LidarPropMaxAngle, self.maxAngle)
         return False
 
     def getAngles(self):
@@ -197,7 +197,7 @@ class Lidar():
             logging.error(f"Invalid maxRange ({range})")
             return True
         self.maxRange = range
-        self.laser.setlidaropt(ydlidar.LidarPropMaxRange, self.range)
+        self.laser.setlidaropt(ydlidar.LidarPropMaxRange, self.maxRange)
         return False
 
     def getRanges(self):
