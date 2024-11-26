@@ -103,22 +103,22 @@ class Lidar():
             exit(1)
         self.laserScan = ydlidar.LaserScan()
 
-    def laserOn(self):
-        if not self.laser.turnOn():
-            logging.error("Failed to turn laser on")
-            return True
-        if not ydlidar.os_isOk():
-            logging.error("Laser not OK")
-            return True
-        self.laserScan = ydlidar.LaserScan()
+    def laserEnable(self, enable):
+        if enable:
+            if not self.laser.turnOn():
+                logging.error("Failed to turn laser on")
+                return True
+            if not ydlidar.os_isOk():
+                logging.error("Laser not OK")
+                return True
+            self.laserScan = ydlidar.LaserScan()
+        else:
+            if not self.laser.turnOff():
+                logging.error("Failed to turn laser off")
+                return True
         return False
 
-    def laserOff(self):
-        if not self.laser.turnOff():
-            logging.error("Failed to turn laser off")
-            return True
-        return False
-
+    #### TODO remove this????
     def rescan(self):
         self.laser.turnOn()
         self.laserScan = ydlidar.LaserScan()
@@ -131,16 +131,17 @@ class Lidar():
             ret = self.laser.doProcessSimple(self.laserScan)
         print("...")
 
-    #### TODO replace scan() and scanIntensity() with scan(vals)
-    def scan(self):
+    def scan(self, values):
         self._scan()
-        angles, distances = zip(*[(p.angle, p.range) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
-        return angles, distances
-
-    def scanIntensity(self):
-        self._scan()
-        angles, distances, intensity = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
-        return angles, distances, intensity
+        angles, distances, intensities = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
+        results = {}
+        if 'angles' in values:
+            results['angles'] = angles
+        if 'distances' in values:
+            results['distances'] = distances
+        if 'intensities' in values:
+            results['intensities'] = intensities
+        return results
 
     '''
     def info(self):
