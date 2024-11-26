@@ -16,7 +16,7 @@
 #          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
 #          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
 #          'zeroFilter': <bool>}
-#      * {'type': 'RESP', 'success': <bool>}
+#      * {'type': 'RESP', 'success': <bool>, 'version': <str>}
 #    - Stop
 #      * {'type': 'CMD', 'command': 'stop'}
 #      * {'type': 'RESP', 'success': <bool>}
@@ -79,9 +79,6 @@ PORTNUM = 8765
 
 PING = 20
 
-GETTERS = {'minAngle': scanner.getAngles, 'maxAngle': scanner.getAngles,
-           'minRange': scanner.getRanges, 'maxRange': scanner.getRanges,
-           'scanFreq': scanner.getScanFreq, 'sampleRate': scanner.getSampleRate}
 
 #### TODO move this to a common location to be shared by clients
 class Commands(Enum):
@@ -95,8 +92,9 @@ class Commands(Enum):
 
 scanner = None
 
-
 async def cmdHandler(websocket):
+    global scanner
+
     async for message in websocket:
         msg = json.loads(message)
         if not 'type' in msg:
@@ -111,11 +109,15 @@ async def cmdHandler(websocket):
         elif msg['command'] == Commands.START.value:
             del msg['type']
             del msg['command']
-            scanner = lidar.Lidar(msg)
-            if scanner:
-                response = {'type': 'RESP', 'success': True}
+            print(f"LLLL: {msg}")
+            if msg:
+                scanner = lidar.Lidar(msg)
             else:
-                response = {'type': 'RESP', 'success': False}
+                scanner = lidar.Lidar()
+            if scanner:
+                response = {'type': 'RESP', 'success': True, 'version': WS_LIDAR_VERSION}
+            else:
+                response = {'type': 'RESP', 'success': False, 'version': WS_LIDAR_VERSION}
         elif msg['command'] == Commands.STOP.value:
             if scanner.done():
                 response = {'type': 'RESP', 'success': True}
@@ -140,6 +142,9 @@ async def cmdHandler(websocket):
             if ('get' not in msg) or (msg['get'] is None):
                 response = {'type': 'RESP', 'success': False}
             else:
+                GETTERS = {'minAngle': scanner.getAngles, 'maxAngle': scanner.getAngles,
+                           'minRange': scanner.getRanges, 'maxRange': scanner.getRanges,
+                           'scanFreq': scanner.getScanFreq, 'sampleRate': scanner.getSampleRate}
                 vals = {}
                 for k in msg['get']:
                     v = GETTERS[k]()
@@ -195,18 +200,12 @@ if __name__ == "__main__":
     logging.basicConfig(level=LOG_LEVEL)
     logging.debug("Starting Lidar Server")
 
-    scanner = lidar.Lidar()
+    if (lidar.LIDAR_VERSION != WS_LIDAR_VERSION):  #### FIXME just check major(/minor?) number
+        logging.error(f"Version mismatch: ({lidar.LIDAR_VERSION} != {WS_LIDAR_VERSION})")
+        exit(1)
 
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(main())
     except KeyboardInterrupt:
         logging.debug("Lidar Server stopped")
-
-'''
-async def sendData(websocket):
-    while True:
-        data = [(i, float(i)) for i in range(400)]  #### FIXME
-        await websocket.send(json.dumps(data))
-        await asyncio.sleep(10)  # Send data every 60 seconds
-'''
