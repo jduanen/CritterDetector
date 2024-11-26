@@ -21,8 +21,8 @@
 #      * {'type': 'CMD', 'command': 'stop'}
 #      * {'type': 'RESP', 'success': <bool>}
 #    - Set value(s)
-#      * {'type': 'CMD', 'command': 'set', ['scanFreq', 'sampleRate',
-#          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
+#      * {'type': 'CMD', 'command': 'set', {'scanFreq': <KHz>, 'sampleRate': <Hz>,
+#          'minAngle': <deg>, 'maxAngle': <deg>, 'minRange': <m>, 'maxRange': <m>}
 #      * {'type': 'RESP', 'success': <bool>, 'results': [<bool>*]}
 #    - Get value(s)
 #      * {'type': 'CMD', 'command': 'get', ['scanFreq', 'sampleRate',
@@ -123,22 +123,18 @@ async def cmdHandler(websocket):
                 response = {'type': 'RESP', 'success': False}
         elif msg['command'] == Commands.SET.value:
             results = []
-            if 'minAngles' in msg['set'] or 'maxAngles' in msg['set']:
-                angles = scanner.getAngles()
-            if 'minRanges' in msg['set'] or 'maxRanges' in msg['set']:
-                ranges = scanner.getRanges()
             if 'scanFreq' in msg['set']:
                 results.append(scanner.setScanFreq(msg['set']['scanFreq']))
             elif 'sampleRate' in msg['set']:
                 results.append(scanner.setSampleRate(msg['set']['sampleRate']))
             elif 'minAngle' in msg['set']:
-                results.append(scanner.setAngles(msg['set']['minAngle'], angles[1]))
+                results.append(scanner.setMinAngle(msg['set']['minAngle']))
             elif 'maxAngle' in msg['set']:
-                results.append(scanner.setAngles(angles[0], msg['set']['maxAngle']))
+                results.append(scanner.setMaxAngle(msg['set']['maxAngle']))
             elif 'minRange' in msg['set']:
-                results.append(scanner.setRanges(msg['set']['minRange'], ranges[1]))
+                results.append(scanner.setMinRange(msg['set']['minRange']))
             elif 'maxRange' in msg['set']:
-                results.append(scanner.setRanges(ranges[0], msg['set']['minRange'])
+                results.append(scanner.setMaxRange(msg['set']['maxRange']))
             response = {'type': 'RESP', 'success': True, 'results': results}
         elif msg['command'] == Commands.GET.value:
             if ('get' not in msg) or (msg['get'] is None):
