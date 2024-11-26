@@ -61,8 +61,8 @@ async def main():
         return False
 
     try:
-        logging.debug("Send command")
-        response = await sendCmd({'type': 'CMD', 'command': Commands.VERSION.value})
+        logging.debug("Send Start command")
+        response = await sendCmd({'type': 'CMD', 'command': Commands.START.value})
         if _validateResponse(response):
             exit(1)
         if response['version'] == WS_LIDAR_VERSION:        #### FIXME
@@ -81,7 +81,7 @@ async def main():
                 for k in valKeys:
                     print(f"{k}: {response['get'][k]}")
             elif cliCmd == 'S':
-                response = await sendCmd({'type': 'CMD', 'command': Commands.START.value},
+                response = await sendCmd({'type': 'CMD', 'command': Commands.START.value,
                                           'minRange': 2.0, 'maxAngle': 120, 'ScanFreq': 8})
                 if _validateResponse(response):
                     break
