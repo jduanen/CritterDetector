@@ -26,7 +26,7 @@ PING = 20
 #### TODO move this to a common location to be shared by clients
 from enum import Enum
 class Commands(Enum):
-    INIT = 'init'
+    START = 'start'
     STOP = 'stop'
     SET = 'set'
     GET = 'get'
@@ -36,7 +36,6 @@ class Commands(Enum):
 
 
 uri = f"ws://{HOSTNAME}:{PORTNUM}"
-i = 0
 
 
 async def sendCmd(command):
@@ -74,35 +73,38 @@ async def main():
 
         cliCmd = input("> ")
         while cliCmd:
-            if cliCmd == 'i':
-                response = await sendCmd({'type': 'CMD', 'command': Commands.VERSION.value})
+            if cliCmd == 'g':
+                valKeys = ['minRange', 'maxRange', 'minAngle', 'maxAngle', 'scanFreq', 'sampleRate']
+                response = await sendCmd({'type': 'CMD', 'command': Commands.GET.value, 'get': valKeys})
+                if _validateResponse(response):
+                    break
+                for k in valKeys:
+                    print(f"{k}: {response['get'][k]}")
+            elif cliCmd == 'S':
+                response = await sendCmd({'type': 'CMD', 'command': Commands.START.value},
+                                          'minRange': 2.0, 'maxAngle': 120, 'ScanFreq': 8})
                 if _validateResponse(response):
                     break
             elif cliCmd == 's':
                 response = await sendCmd({'type': 'CMD', 'command': Commands.STOP.value})
                 if _validateResponse(response):
                     break
+            elif cliCmd == 'v':
+                valKeys = {'minRange': 2.5, 'minAngle': -90, 'maxRange': 8.5, 'scanFreq': 2}
+                response = await sendCmd({'type': 'CMD', 'command': Commands.SET.value, 'set': valDict})
+                if _validateResponse(response):
+                    break
             elif (cliCmd == '?') or (cliCmd == 'h'):
                 print("h: this message")
-                print("i: initialize lidar device")
+                print("S: start lidar device")
+                print("g: get values")
                 print("s: stop lidar device")
+                print("v: set values")
                 print("?: this message")
             else:
                 logging.error(f"Invalid input: {cliCmd}")
                 break
             cliCmd = input("> ")
-
-
-        '''
-            logging.debug("Send command")
-            cmd = {'type': 'CMD', 'command': 'version'}
-            response = await sendCmd(cmd)
-            logging.debug(f"Received response: {response}")
-            if ('type' not in response) or response['type'] == 'ERROR':
-                logging.error(f"Bad Response message: {response}")
-                exit(1)
-            i = response['data']
-        '''
     except (websockets.ConnectionClosed, OSError) as e:
         logging.warning(f"Connection error: {e}, retrying in 5 seconds...")
         await asyncio.sleep(5)
