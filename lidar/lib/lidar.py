@@ -2,7 +2,7 @@
 '''
 ################################################################################
 #
-# YDLIDAR T-mini Lidar Scanner Library (T-mini Pro)
+# YDLIDAR (T-mini Pro) Lidar Scanner Library
 #
 # Specs:
 # * Laser wavelength: 895-915nm (905nm typ)

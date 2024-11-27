@@ -2,7 +2,7 @@
 '''
 ################################################################################
 #
-# YDLIDAR T-mini Lidar Scanner Library (T-mini Pro) with Web Sockets interface
+# YDLIDAR Lidar (T-mini Pro) Scanner Library with Web Sockets interface
 #
 # WS Interface:
 #  * send dicts serialized to json (with json.dumps())
