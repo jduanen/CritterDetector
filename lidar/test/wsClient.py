@@ -9,6 +9,25 @@ import logging
 import requests
 import websockets
 
+#### FIXME get this from a common location
+from enum import Enum, unique
+
+@unique
+class MessageTypes(Enum):
+    CMD = 'command'
+    REPLY = 'reply'
+    ERROR = 'error'
+    HALT = 'halt'
+
+@unique
+class Commands(Enum):
+    START = 'start'
+    STOP = 'stop'
+    SET = 'set'
+    GET = 'get'
+    SCAN = 'scan'
+    LASER = 'laser'
+    VERSION = 'version'
 
 #### TODO make a shareable library that encapsulates all the client calls -- try to make a class
 #### TODO turn this into an interface test
@@ -22,17 +41,6 @@ HOSTNAME = "gpuServer1"
 PORTNUM = 8765
 
 PING = 20
-
-#### TODO move this to a common location to be shared by clients
-from enum import Enum
-class Commands(Enum):
-    START = 'start'
-    STOP = 'stop'
-    SET = 'set'
-    GET = 'get'
-    SCAN = 'scan'
-    LASER = 'laser'
-    VERSION = 'version'
 
 
 uri = f"ws://{HOSTNAME}:{PORTNUM}"
@@ -50,20 +58,21 @@ async def sendCmd(command):
         logging.debug(f"Received response: {response}")
         return response
 
-async def main():
-    logging.basicConfig(level=LOG_LEVEL)
+async def ainput(prompt=""):
+    return await asyncio.to_thread(input, prompt)
 
+async def main():
     def _validateResponse(respMsg):
-        if ('type' not in respMsg) or (respMsg['type'] == 'ERROR'):
+        if ('type' not in respMsg) or (respMsg['type'] not in [MessageTypes.REPLY.value, MessageTypes.ERROR.value]):
             logging.error(f"Bad Response message: {response}")
             return True
-        logging.debug("Response valid")
+        logging.debug("Response valid: ")
         return False
 
     try:
         logging.debug("Send Start command")
         #### TODO add device init options in the start command
-        response = await sendCmd({'type': 'CMD', 'command': Commands.START.value})
+        response = await sendCmd({'type': MessageTypes.CMD.value, 'command': Commands.START.value})
         if _validateResponse(response):
             exit(1)
         if response['version'] == WS_LIDAR_VERSION:        #### FIXME
@@ -72,27 +81,27 @@ async def main():
             logging.error(f"Invalid Version: {response['version']} != {WS_LIDAR_VERSION}")
             exit(1)
 
-        cliCmd = input("> ")
+        cliCmd = await ainput("> ")
         while cliCmd:
             if cliCmd == 'g':
                 valKeys = ['minRange', 'maxRange', 'minAngle', 'maxAngle', 'scanFreq', 'sampleRate']
-                response = await sendCmd({'type': 'CMD', 'command': Commands.GET.value, 'get': valKeys})
+                response = await sendCmd({'type': MessageTypes.CMD.value, 'command': Commands.GET.value, 'get': valKeys})
                 if _validateResponse(response):
                     break
                 for k in valKeys:
-                    print(f"{k}: {response['get'][k]}")
+                    print(f"{k}: {response['values'][k]}")
             elif cliCmd == 'S':
                 options = {'minRange': 2.0, 'maxRange': 4.5, 'maxAngle': 120, 'ScanFreq': 8}
-                response = await sendCmd({'type': 'CMD', 'command': Commands.START.value, 'options': options})
+                response = await sendCmd({'type': MessageTypes.CMD.value, 'command': Commands.START.value, 'options': options})
                 if _validateResponse(response):
                     break
             elif cliCmd == 's':
-                response = await sendCmd({'type': 'CMD', 'command': Commands.STOP.value})
+                response = await sendCmd({'type': MessageTypes.CMD.value, 'command': Commands.STOP.value})
                 if _validateResponse(response):
                     break
             elif cliCmd == 'v':
                 valDict = {'minRange': 2.5, 'minAngle': -90, 'maxRange': 8.5, 'scanFreq': 2}
-                response = await sendCmd({'type': 'CMD', 'command': Commands.SET.value, 'set': valDict})
+                response = await sendCmd({'type': MessageTypes.CMD.value, 'command': Commands.SET.value, 'set': valDict})
                 if _validateResponse(response):
                     break
             elif (cliCmd == '?') or (cliCmd == 'h'):
@@ -105,8 +114,8 @@ async def main():
             else:
                 logging.error(f"Invalid input: {cliCmd}")
                 break
-            cliCmd = input("> ")
-        await sendCmd({'type': 'STOP'})
+            cliCmd = await ainput("> ")
+        await sendCmd({'type': MessageTypes.HALT.value})
     except (websockets.ConnectionClosed, OSError) as e:
         logging.warning(f"Connection error: {e}, retrying in 5 seconds...")
         await asyncio.sleep(5)
@@ -114,6 +123,8 @@ async def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=LOG_LEVEL)
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

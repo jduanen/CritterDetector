@@ -8,41 +8,48 @@
 #  * send dicts serialized to json (with json.dumps())
 #  * receive serialized json strings and deserialize to dicts (with json.loads())
 #  * message formats
-#    - stop: {'type': 'STOP'}
-#    - command: {'type': 'CMD', 'command': <cmd>, <**argKVs>}
-#    - response: {'type': 'RESP', 'cmd': <cmd>, <returnKVs>}
+#    - halt: {'type': 'HALT'}
+#    - command: {'type': 'CMD', 'command': <cmd>, ????: <KVs>}
+#    - response: {'type': 'REPLY', ????: <returnKVs>}
+#    - error: {'type': 'ERROR', 'error': <errMsg>}
 #  * commands/responses
 #    - Start
-#      * {'type': 'CMD', 'command':'start', 'port': <path>", 'baud': <int>,
+#      * {'type': 'CMD', 'command': 'start', 'port': <path>", 'baud': <int>,
 #          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
 #          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
 #          'zeroFilter': <bool>}
-#      * {'type': 'RESP', 'success': <bool>, 'version': <str>}
+#      * {'type': 'REPLY', 'version': <str>}
+#      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Stop
 #      * {'type': 'CMD', 'command': 'stop'}
-#      * {'type': 'RESP', 'success': <bool>}
-#    - Set value(s)
-#      * {'type': 'CMD', 'command': 'set', {'scanFreq': <KHz>, 'sampleRate': <Hz>,
+#      * {'type': 'REPLY'}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Set values
+#      * {'type': 'CMD', 'command': 'set', 'set': {'scanFreq': <KHz>, 'sampleRate': <Hz>,
 #          'minAngle': <deg>, 'maxAngle': <deg>, 'minRange': <m>, 'maxRange': <m>}
-#      * {'type': 'RESP', 'success': <bool>, 'results': {'scanFreq': <bool>,
+#      * {'type': 'REPLY', 'results': {'scanFreq': <bool>,
 #          'sampleRate': <bool>, 'minAngle': <bool>, 'maxAngle': <bool>,
 #          'minRange': <bool>, 'maxRange': <bool>}
+#      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Get value(s)
-#      * {'type': 'CMD', 'command': 'get', ['scanFreq', 'sampleRate',
+#      * {'type': 'CMD', 'command': 'get', 'get': ['scanFreq', 'sampleRate',
 #          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
-#      * {'type': 'RESP', 'success': <bool>, 'values': ['scanFreq': <Hz>,
-#          'sampleRate': <KHz>, 'minAngle': <degrees>, 'maxAngle': <degrees>,
-#          'minRange': <meters>, 'maxRange': <meters>]}
+#      * {'type': 'REPLY', 'values': {'scanFreq': <Hz>, 'sampleRate': <KHz>,
+#          'minAngle': <degrees>, 'maxAngle': <degrees>,
+#          'minRange': <meters>, 'maxRange': <meters>}}
+#      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Scan
 #      * {'type': 'CMD', 'command': 'scan', 'values': ['angles', 'distances', 'intensities']}
-#      * {'type': 'RESP', 'success': <bool>, 'values': {'angles': <floatList>,
-#          'distances': <intList>, 'intensities': <intList>}}
+#      * {'type': 'REPLY', 'values': {'angles': <floatList>, 'distances': <intList>, 'intensities': <intList>}}
+#      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Laser on/off
 #      * {'type': 'CMD', 'command': 'laser', 'enable': <bool>}
-#      * {'type': 'RESP', 'success': <bool>}
+#      * {'type': 'REPLY'}
+#      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Version
 #      * {'type': 'CMD', 'command': 'version'}
-#      * {'type': 'RESP', 'success': <bool>, 'version': <str>}
+#      * {'type': 'REPLY', 'version': <str>}
+#      * {'type': 'ERROR', 'error': <errMsg>}
 #
 # Specs:
 # * Laser wavelength: 895-915nm (905nm typ)
@@ -68,6 +75,25 @@ import lidar
 
 #import pdb  ## pdb.set_trace()
 
+#### FIXME get this from a common location
+from enum import Enum, unique
+
+@unique
+class MessageTypes(Enum):
+    CMD = 'command'
+    REPLY = 'reply'
+    ERROR = 'error'
+    HALT = 'halt'
+
+@unique
+class Commands(Enum):
+    START = 'start'
+    STOP = 'stop'
+    SET = 'set'
+    GET = 'get'
+    SCAN = 'scan'
+    LASER = 'laser'
+    VERSION = 'version'
 #### TODO consider using 'wss://' sockets
 #### TODO fix exception/exit handling
 #### TODO make version test only look at major (minor too?) value
@@ -82,18 +108,8 @@ PORTNUM = 8765
 
 PING = 20
 
-
-#### TODO move this to a common location to be shared by clients
-class Commands(Enum):
-    START = 'start'
-    STOP = 'stop'
-    SET = 'set'
-    GET = 'get'
-    SCAN = 'scan'
-    LASER = 'laser'
-    VERSION = 'version'
-
 scanner = None
+
 
 async def cmdHandler(websocket):
     global scanner
@@ -101,52 +117,71 @@ async def cmdHandler(websocket):
     async for message in websocket:
         msg = json.loads(message)
         if not 'type' in msg:
-            logging.error(f"No message type: {msg}")
-            response = {'type': 'ERROR'}
-            logging.debug(f"Sending Error Response: {response}")
+            errMsg = f"No message type field: {msg}"
+            logging.error(errMsg)
+            response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+            logging.debug(f"Send Response: {response}")
             await websocket.send(json.dumps(response))
             exit(1)
-        if msg['type'] == 'STOP':
+        print(f"XXXX: {msg['type']}")
+        if msg['type'] == MessageTypes.HALT.value:
             scanner.done()
             scanner = None
+            logging.info("Received Stop message, exit")
             exit(0)
-        if msg['type'] != 'CMD':
-            logging.warning(f"Not a command, ignoring: {msg['type']}")
-            response = {'type': 'RESP', 'success': False}
-        elif msg['command'] == Commands.START.value:
+        if msg['type'] != MessageTypes.CMD.value:
+            errMsg = f"Not a command, ignoring: {msg['type']}"
+            logging.warning(errMsg)
+            response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+        elif not scanner and (msg['command'] != 'Commands.START.value'):
+            errMsg = f"Must issue start command first, ignoring: {msg}"
+            logging.warning(errMsg)
+            response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+        if msg['command'] == Commands.START.value:
             if ('options' in msg) and msg['options']:
                 scanner = lidar.Lidar(**msg['options'])
             else:
                 scanner = lidar.Lidar()
             if scanner:
-                response = {'type': 'RESP', 'success': True, 'version': WS_LIDAR_VERSION}
+                response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
             else:
-                response = {'type': 'RESP', 'success': False, 'version': WS_LIDAR_VERSION}
+                errMsg = "Failed to initialize the lidar device"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.STOP.value:
             if scanner.done():
                 scanner = None
-                response = {'type': 'RESP', 'success': True}
+                response = {'type': MessageTypes.REPLY.value}
             else:
-                response = {'type': 'RESP', 'success': False}
+                errMsg = "Failed to shutdown the lidar"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.SET.value:
-            results = {}
-            for k in msg['set']:
-                if k == 'scanFreq':
-                    results['scanFreq'] = scanner.setScanFreq(msg['set']['scanFreq'])
-                elif k == 'sampleRate':
-                    results['sampleRate'] = scanner.setSampleRate(msg['set']['sampleRate'])
-                elif k == 'minAngle':
-                    results['minAngle'] = scanner.setMinAngle(msg['set']['minAngle'])
-                elif k == 'maxAngle':
-                    results['maxAngle'] = scanner.setMaxAngle(msg['set']['maxAngle'])
-                elif k == 'minRange':
-                    results['minRange'] = scanner.setMinRange(msg['set']['minRange'])
-                elif k == 'maxRange':
-                    results['maxRange'] = scanner.setMaxRange(msg['set']['maxRange'])
-            response = {'type': 'RESP', 'success': True, 'results': results}
+            if ('set' not in msg) or (msg['set'] is None):
+                errMsg = "No values to set"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+            else:
+                results = {}
+                for k in msg['set']:
+                    if k == 'scanFreq':
+                        results['scanFreq'] = scanner.setScanFreq(msg['set']['scanFreq'])
+                    elif k == 'sampleRate':
+                        results['sampleRate'] = scanner.setSampleRate(msg['set']['sampleRate'])
+                    elif k == 'minAngle':
+                        results['minAngle'] = scanner.setMinAngle(msg['set']['minAngle'])
+                    elif k == 'maxAngle':
+                        results['maxAngle'] = scanner.setMaxAngle(msg['set']['maxAngle'])
+                    elif k == 'minRange':
+                        results['minRange'] = scanner.setMinRange(msg['set']['minRange'])
+                    elif k == 'maxRange':
+                        results['maxRange'] = scanner.setMaxRange(msg['set']['maxRange'])
+                response = {'type': MessageTypes.REPLY.value, 'results': results}
         elif msg['command'] == Commands.GET.value:
             if ('get' not in msg) or (msg['get'] is None):
-                response = {'type': 'RESP', 'success': False}
+                errMsg = "No values to get"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
             else:
                 GETTERS = {'minAngle': scanner.getAngles, 'maxAngle': scanner.getAngles,
                            'minRange': scanner.getRanges, 'maxRange': scanner.getRanges,
@@ -164,30 +199,34 @@ async def cmdHandler(websocket):
                         vals[k] = v[1]
                     elif k in ['scanFreq', 'sampleRate']:
                         vals[k] = v
-                if vals:
-                    response = {'type': 'RESP', 'success': True, 'get': vals}
-                else:
-                    response = {'type': 'RESP', 'success': False, 'get': None}
+                response = {'type': MessageTypes.REPLY.value, 'values': vals}
         elif msg['command'] == Commands.SCAN.value:
             points = scanner.scan(msg['values'])
             if points:
-                response = {'type': 'RESP', 'success': True, 'values': points}
+                response = {'type': MessageTypes.REPLY.value, 'values': points}
             else:
-                response = {'type': 'RESP', 'success': False, 'values': None}
+                errMsg = "Failed to get requested samples"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.LASER.value:
             if scanner.laserEnable(msg['enable']):
-                response = {'type': 'RESP', 'success': True}
+                response = {'type': MessageTypes.REPLY.value}
             else:
-                response = {'type': 'RESP', 'success': False}
+                errMsg = "Failed to turn laser on/off"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.VERSION.value:
             version = scanner.getVersion()
             if version:
-                response = {'type': 'RESP', 'success': True, 'version': version}
+                response = {'type': MessageTypes.REPLY.value, 'version': version}
             else:
-                response = {'type': 'RESP', 'success': False, 'version': None}
+                errMsg = "Failed to get lidar library version"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         else:
-            logging.warning(f"Unknown command: {msg['command']}")
-            response = {'type': 'RESP', 'success': False}
+            errMsg = f"Unknown command: {msg['command']}"
+            logging.warning(errMsg)
+            response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         logging.debug(f"Send Response: {response}")
         await websocket.send(json.dumps(response))
 
