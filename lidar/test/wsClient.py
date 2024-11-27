@@ -62,6 +62,7 @@ async def main():
 
     try:
         logging.debug("Send Start command")
+        #### TODO add device init options in the start command
         response = await sendCmd({'type': 'CMD', 'command': Commands.START.value})
         if _validateResponse(response):
             exit(1)
@@ -81,8 +82,8 @@ async def main():
                 for k in valKeys:
                     print(f"{k}: {response['get'][k]}")
             elif cliCmd == 'S':
-                response = await sendCmd({'type': 'CMD', 'command': Commands.START.value,
-                                          'minRange': 2.0, 'maxAngle': 120, 'ScanFreq': 8})
+                options = {'minRange': 2.0, 'maxRange': 4.5, 'maxAngle': 120, 'ScanFreq': 8}
+                response = await sendCmd({'type': 'CMD', 'command': Commands.START.value, 'options': options})
                 if _validateResponse(response):
                     break
             elif cliCmd == 's':
@@ -90,7 +91,7 @@ async def main():
                 if _validateResponse(response):
                     break
             elif cliCmd == 'v':
-                valKeys = {'minRange': 2.5, 'minAngle': -90, 'maxRange': 8.5, 'scanFreq': 2}
+                valDict = {'minRange': 2.5, 'minAngle': -90, 'maxRange': 8.5, 'scanFreq': 2}
                 response = await sendCmd({'type': 'CMD', 'command': Commands.SET.value, 'set': valDict})
                 if _validateResponse(response):
                     break
@@ -105,9 +106,11 @@ async def main():
                 logging.error(f"Invalid input: {cliCmd}")
                 break
             cliCmd = input("> ")
+        await sendCmd({'type': 'STOP'})
     except (websockets.ConnectionClosed, OSError) as e:
         logging.warning(f"Connection error: {e}, retrying in 5 seconds...")
         await asyncio.sleep(5)
+    exit(1)
 
 
 if __name__ == "__main__":
