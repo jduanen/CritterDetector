@@ -8,6 +8,7 @@
 #  * send dicts serialized to json (with json.dumps())
 #  * receive serialized json strings and deserialize to dicts (with json.loads())
 #  * message formats
+#    - stop: {'type': 'STOP'}
 #    - command: {'type': 'CMD', 'command': <cmd>, <**argKVs>}
 #    - response: {'type': 'RESP', 'cmd': <cmd>, <returnKVs>}
 #  * commands/responses
@@ -23,7 +24,9 @@
 #    - Set value(s)
 #      * {'type': 'CMD', 'command': 'set', {'scanFreq': <KHz>, 'sampleRate': <Hz>,
 #          'minAngle': <deg>, 'maxAngle': <deg>, 'minRange': <m>, 'maxRange': <m>}
-#      * {'type': 'RESP', 'success': <bool>, 'results': [<bool>*]}
+#      * {'type': 'RESP', 'success': <bool>, 'results': {'scanFreq': <bool>,
+#          'sampleRate': <bool>, 'minAngle': <bool>, 'maxAngle': <bool>,
+#          'minRange': <bool>, 'maxRange': <bool>}
 #    - Get value(s)
 #      * {'type': 'CMD', 'command': 'get', ['scanFreq', 'sampleRate',
 #          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
@@ -103,15 +106,16 @@ async def cmdHandler(websocket):
             logging.debug(f"Sending Error Response: {response}")
             await websocket.send(json.dumps(response))
             exit(1)
+        if msg['type'] == 'STOP':
+            scanner.done()
+            scanner = None
+            exit(0)
         if msg['type'] != 'CMD':
             logging.warning(f"Not a command, ignoring: {msg['type']}")
             response = {'type': 'RESP', 'success': False}
         elif msg['command'] == Commands.START.value:
-            del msg['type']
-            del msg['command']
-            print(f"LLLL: {msg}")
-            if msg:
-                scanner = lidar.Lidar(msg)
+            if ('options' in msg) and msg['options']:
+                scanner = lidar.Lidar(**msg['options'])
             else:
                 scanner = lidar.Lidar()
             if scanner:
@@ -120,23 +124,25 @@ async def cmdHandler(websocket):
                 response = {'type': 'RESP', 'success': False, 'version': WS_LIDAR_VERSION}
         elif msg['command'] == Commands.STOP.value:
             if scanner.done():
+                scanner = None
                 response = {'type': 'RESP', 'success': True}
             else:
                 response = {'type': 'RESP', 'success': False}
         elif msg['command'] == Commands.SET.value:
-            results = []
-            if 'scanFreq' in msg['set']:
-                results.append(scanner.setScanFreq(msg['set']['scanFreq']))
-            elif 'sampleRate' in msg['set']:
-                results.append(scanner.setSampleRate(msg['set']['sampleRate']))
-            elif 'minAngle' in msg['set']:
-                results.append(scanner.setMinAngle(msg['set']['minAngle']))
-            elif 'maxAngle' in msg['set']:
-                results.append(scanner.setMaxAngle(msg['set']['maxAngle']))
-            elif 'minRange' in msg['set']:
-                results.append(scanner.setMinRange(msg['set']['minRange']))
-            elif 'maxRange' in msg['set']:
-                results.append(scanner.setMaxRange(msg['set']['maxRange']))
+            results = {}
+            for k in msg['set']:
+                if k == 'scanFreq':
+                    results['scanFreq'] = scanner.setScanFreq(msg['set']['scanFreq'])
+                elif k == 'sampleRate':
+                    results['sampleRate'] = scanner.setSampleRate(msg['set']['sampleRate'])
+                elif k == 'minAngle':
+                    results['minAngle'] = scanner.setMinAngle(msg['set']['minAngle'])
+                elif k == 'maxAngle':
+                    results['maxAngle'] = scanner.setMaxAngle(msg['set']['maxAngle'])
+                elif k == 'minRange':
+                    results['minRange'] = scanner.setMinRange(msg['set']['minRange'])
+                elif k == 'maxRange':
+                    results['maxRange'] = scanner.setMaxRange(msg['set']['maxRange'])
             response = {'type': 'RESP', 'success': True, 'results': results}
         elif msg['command'] == Commands.GET.value:
             if ('get' not in msg) or (msg['get'] is None):
