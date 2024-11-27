@@ -123,7 +123,6 @@ async def cmdHandler(websocket):
             logging.debug(f"Send Response: {response}")
             await websocket.send(json.dumps(response))
             exit(1)
-        print(f"XXXX: {msg['type']}")
         if msg['type'] == MessageTypes.HALT.value:
             scanner.done()
             scanner = None
@@ -133,7 +132,7 @@ async def cmdHandler(websocket):
             errMsg = f"Not a command, ignoring: {msg['type']}"
             logging.warning(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
-        elif not scanner and (msg['command'] != 'Commands.START.value'):
+        elif not scanner or (msg['command'] != 'Commands.START.value'):
             errMsg = f"Must issue start command first, ignoring: {msg}"
             logging.warning(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
