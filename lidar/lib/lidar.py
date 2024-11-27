@@ -129,7 +129,6 @@ class Lidar():
             self.laser.turnOn()
             self.laserScan = ydlidar.LaserScan()
             ret = self.laser.doProcessSimple(self.laserScan)
-        print("...")
 
     def scan(self, values):
         self._scan()
@@ -164,16 +163,14 @@ class Lidar():
             logging.error(f"Invalid minAngle ({angle})")
             return True
         self.minAngle = angle
-        self.laser.setlidaropt(ydlidar.LidarPropMinAngle, self.minAngle)
-        return False
+        return not self.laser.setlidaropt(ydlidar.LidarPropMinAngle, self.minAngle)
 
     def setMaxAngle(self, angle):
         if (angle > 180.0) or (angle < -180.0):
             logging.error(f"Invalid maxAngle ({angle})")
             return True
         self.maxAngle = angle
-        self.laser.setlidaropt(ydlidar.LidarPropMaxAngle, self.maxAngle)
-        return False
+        return not self.laser.setlidaropt(ydlidar.LidarPropMaxAngle, self.maxAngle)
 
     def getAngles(self):
         return self.maxAngle, self.minAngle
@@ -189,16 +186,14 @@ class Lidar():
             logging.error(f"Invalid minRange ({range})")
             return True
         self.minRange = range
-        self.laser.setlidaropt(ydlidar.LidarPropMinRange, self.minRange)
-        return False
+        return not self.laser.setlidaropt(ydlidar.LidarPropMinRange, self.minRange)
 
     def setMaxRange(self, range):
         if (range > 1000) or (range < 0):    #### FIXME
             logging.error(f"Invalid maxRange ({range})")
             return True
         self.maxRange = range
-        self.laser.setlidaropt(ydlidar.LidarPropMaxRange, self.maxRange)
-        return False
+        return not self.laser.setlidaropt(ydlidar.LidarPropMaxRange, self.maxRange)
 
     def getRanges(self):
         return self.maxRange, self.minRange
@@ -206,9 +201,9 @@ class Lidar():
     def setScanFreq(self, scanFreq):
         if (scanFreq > MAX_SCAN_FREQ) or (scanFreq < MIN_SCAN_FREQ):
             logging.error(f"Invalid scan frequency ({scanFreq})")
-            return
+            return True
         self.scanFreq = scanFreq
-        self.laser.setlidaropt(ydlidar.LidarPropScanFrequency, self.scanFreq)
+        return not self.laser.setlidaropt(ydlidar.LidarPropScanFrequency, self.scanFreq)
 
     def getScanFreq(self):
         return self.scanFreq
@@ -216,9 +211,9 @@ class Lidar():
     def setSampleRate(self, sampleRate):
         if (sampleRate > MAX_SAMPLE_RATE) or (sampleRate < MIN_SAMPLE_RATE):
             logging.error(f"Invalid sample rate ({sampleRate})")
-            return
+            return True
         self.sampleRate = sampleRate
-        self.laser.setlidaropt(ydlidar.LidarPropSampleRate, self.sampleRate)
+        return not self.laser.setlidaropt(ydlidar.LidarPropSampleRate, self.sampleRate)
 
     def getSampleRate(self):
         return self.sampleRate
