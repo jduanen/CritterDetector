@@ -94,6 +94,7 @@ class Commands(Enum):
     SCAN = 'scan'
     LASER = 'laser'
     VERSION = 'version'
+
 #### TODO consider using 'wss://' sockets
 #### TODO fix exception/exit handling
 #### TODO make version test only look at major (minor too?) value
@@ -137,16 +138,20 @@ async def cmdHandler(websocket):
             logging.warning(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         if msg['command'] == Commands.START.value:
-            if ('options' in msg) and msg['options']:
-                scanner = lidar.Lidar(**msg['options'])
-            else:
-                scanner = lidar.Lidar()
             if scanner:
+                logging.warning("Device already started, ignoring Start command")
                 response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
             else:
-                errMsg = "Failed to initialize the lidar device"
-                logging.warning(errMsg)
-                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+                if ('options' in msg) and msg['options']:
+                    scanner = lidar.Lidar(**msg['options'])
+                else:
+                    scanner = lidar.Lidar()
+                if scanner:
+                    response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
+                else:
+                    errMsg = "Failed to initialize the lidar device"
+                    logging.warning(errMsg)
+                    response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.STOP.value:
             if scanner.done():
                 scanner = None
@@ -236,8 +241,10 @@ async def main():
             future = asyncio.get_running_loop().create_future()
             await future
     except asyncio.CancelledError:
-        print("Future was cancelled, exiting...")
+        logging.error("Future was cancelled, exiting...")
         # Perform any necessary cleanup here
+    except Exception as ex:
+        logging.error(ex)
 
 
 if __name__ == "__main__":
@@ -252,4 +259,6 @@ if __name__ == "__main__":
     try:
         loop.run_until_complete(main())
     except KeyboardInterrupt:
-        logging.debug("Lidar Server stopped")
+        logging.debug("Lidar Server manually stopped")
+    except Exception as ex:
+        logging.error(ex)
