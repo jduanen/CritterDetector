@@ -25,13 +25,15 @@ async def cli(lidar):
     try:
         cliCmd = input("> ")
         while cliCmd:
+            '''
             if cliCmd == 'L':
                 response = await lidar.laser(True)
                 print(f"LASER ON: {response}")
             elif cliCmd == 'l':
                 response = await lidar.laser(False)
                 print(f"LASER OFF: {response}")
-            elif cliCmd == 'r':
+            '''
+            if cliCmd == 'r':
                 names = ['minRange', 'maxRange', 'minAngle', 'maxAngle', 'scanFreq', 'sampleRate']
                 response = await lidar.get(names)
                 print(f"GET: {response}")
@@ -54,8 +56,9 @@ async def cli(lidar):
                 print(f"HALT: {response}")
             elif (cliCmd == '?') or (cliCmd == 'h'):
                 print("h: this message")
-                print("L: turn laser on")
-                print("l: turn laser off")
+                #print("L: turn laser on")
+                #print("l: turn laser off")
+                print("q: quit")
                 print("r: read values")
                 print("s: start lidar device")
                 print("S: stop lidar device")
@@ -63,9 +66,10 @@ async def cli(lidar):
                 print("w: write values")
                 print("X: shutdown server")
                 print("?: this message")
+            elif cliCmd in ['q', 'Q']:
+                break
             else:
                 logging.error(f"Invalid input: {cliCmd}")
-                break
             cliCmd = input("> ")
         await lidar.stop()
     except (websockets.ConnectionClosed, OSError) as e:

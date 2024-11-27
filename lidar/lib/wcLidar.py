@@ -129,11 +129,17 @@ class LidarClient():
         #### FIXME
         return False
 
-    async def laser(self, enable):
-        #### FIXME
+    '''
+    async def laser(self, enable=False):
+        response = await self._sendCmd(Commands.LASER.value, {'enable': enable})
+        if response == None:
+            return True
         return False
+    '''
 
     async def version(self):
-        #### FIXME
-        return False
+        response = await self._sendCmd(Commands.VERSION.value)
+        if (response == None) or ('version' not in response):
+            return None
+        return response['version']
 
