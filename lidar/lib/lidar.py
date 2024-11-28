@@ -25,8 +25,6 @@ import ydlidar
 #import pdb  ## pdb.set_trace()
 
 
-LIDAR_VERSION = "1.1.0"
-
 DEF_LOG_LEVEL = "WARNING"
 
 DEF_CONFIGS_FILE = "./.lidar.yaml"
@@ -56,6 +54,8 @@ MAX_TILT_ANGLE = 1.5   # degrees
 
 
 class Lidar():
+    LIDAR_VERSION = "1.2.0"
+
     def __init__(self, **kwargs):
         self.port = kwargs.get('port', None)
         self.baud = kwargs.get('baud', DEF_BAUD_RATE)
@@ -130,15 +130,15 @@ class Lidar():
             self.laserScan = ydlidar.LaserScan()
             ret = self.laser.doProcessSimple(self.laserScan)
 
-    def scan(self, values):
+    def scan(self, names):
         self._scan()
         angles, distances, intensities = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
         results = {}
-        if 'angles' in values:
+        if 'angles' in names:
             results['angles'] = angles
-        if 'distances' in values:
+        if 'distances' in names:
             results['distances'] = distances
-        if 'intensities' in values:
+        if 'intensities' in names:
             results['intensities'] = intensities
         return results
 
@@ -219,7 +219,7 @@ class Lidar():
         return self.sampleRate
 
     def getVersion(self):
-        return LIDAR_VERSION
+        return Lidar.LIDAR_VERSION
 
     def done(self):
         return (not self.laser.turnOff()) or (not self.laser.disconnecting())
