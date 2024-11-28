@@ -14,35 +14,17 @@ import json
 import logging
 import websockets
 
-import lidar
+from ..shared import MessageTypes, Commands
 
-#### FIXME get this from a common location
-from enum import Enum, unique
-
-@unique
-class MessageTypes(Enum):
-    CMD = 'command'
-    REPLY = 'reply'
-    ERROR = 'error'
-    HALT = 'halt'
-
-@unique
-class Commands(Enum):
-    START = 'start'
-    STOP = 'stop'
-    SET = 'set'
-    GET = 'get'
-    SCAN = 'scan'
-    LASER = 'laser'
-    VERSION = 'version'
-
-WC_LIDAR_VERSION = "1.1.0"  # N.B. Must match lidar.py library's version
 
 LOG_LEVEL = "DEBUG"
 
 DEF_PING = 20
 
+
 class LidarClient():
+    WC_LIDAR_VERSION = "1.2.0"  # N.B. Must match lidar.py library's version
+
     def __init__(self, hostname, portNum):
         self.hostname = hostname
         self.portNum = portNum
@@ -92,10 +74,10 @@ class LidarClient():
             response = await self._sendCmd(Commands.START.value, {'options': options})
             if response == None:
                 return True
-            if response['version'] == WC_LIDAR_VERSION:        #### FIXME semver test
+            if response['version'] == LidarClient.WC_LIDAR_VERSION:        #### FIXME semver test
                 logging.debug(f"Version good: {response['version']}")
             else:
-                logging.error(f"Invalid Version: {response['version']} != {WC_LIDAR_VERSION}")
+                logging.error(f"Invalid Version: {response['version']} != {LidarClient.WC_LIDAR_VERSION}")
                 return True
             self.started = True
         return False
@@ -126,16 +108,10 @@ class LidarClient():
         return response['values']
 
     async def scan(self, names):
-        #### FIXME
-        return False
-
-    '''
-    async def laser(self, enable=False):
-        response = await self._sendCmd(Commands.LASER.value, {'enable': enable})
-        if response == None:
-            return True
-        return False
-    '''
+        response = await self._sendCmd(Commands.SCAN.value, {'names': names})
+        if (response == None) or ('values' not in response):
+            return None
+        return response['values']
 
     async def version(self):
         response = await self._sendCmd(Commands.VERSION.value)
