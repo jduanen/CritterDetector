@@ -72,40 +72,17 @@ import logging
 import websockets
 
 from ..shared import MessageTypes, Commands
-import lidar
+from ..lib.lidar import Lidar
 
 #import pdb  ## pdb.set_trace()
-
-'''
-#### FIXME get this from a common location
-from enum import Enum, unique
-
-@unique
-class MessageTypes(Enum):
-    CMD = 'command'
-    REPLY = 'reply'
-    ERROR = 'error'
-    HALT = 'halt'
-
-@unique
-class Commands(Enum):
-    START = 'start'
-    STOP = 'stop'
-    SET = 'set'
-    GET = 'get'
-    SCAN = 'scan'
-    LASER = 'laser'
-    VERSION = 'version'
-'''
 
 #### TODO consider using 'wss://' sockets
 #### TODO fix exception/exit handling
 #### TODO make version test only look at major (minor too?) value
 
-
-WS_LIDAR_VERSION = "1.1.0"  # N.B. Must match lidar.py library's version
-
 LOG_LEVEL = "DEBUG"
+
+WS_LIDAR_VERSION = "1.2.0"  # N.B. Must match lidar.py library's version
 
 HOSTNAME = "0.0.0.0"
 PORTNUM = 8765
@@ -147,9 +124,9 @@ async def cmdHandler(websocket):
             else:
                 try:
                     if ('options' in msg) and msg['options']:
-                        scanner = lidar.Lidar(**msg['options'])
+                        scanner = Lidar(**msg['options'])
                     else:
-                        scanner = lidar.Lidar()
+                        scanner = Lidar()
                 except Exception as ex:
                     logging.error(f"Failed to attach to lidar: {ex}")
                     return True
@@ -259,8 +236,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=LOG_LEVEL)
     logging.debug("Starting Lidar Server")
 
-    if (lidar.LIDAR_VERSION != WS_LIDAR_VERSION):  #### FIXME just check major(/minor?) number
-        logging.error(f"Version mismatch: ({lidar.LIDAR_VERSION} != {WS_LIDAR_VERSION})")
+    if (Lidar.LIDAR_VERSION != WS_LIDAR_VERSION):  #### FIXME just check major(/minor?) number
+        logging.error(f"Version mismatch: ({Lidar.LIDAR_VERSION} != {WS_LIDAR_VERSION})")
         exit(1)
 
     loop = asyncio.get_event_loop()
