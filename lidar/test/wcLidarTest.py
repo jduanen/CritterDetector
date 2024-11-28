@@ -8,7 +8,7 @@ import json
 import logging
 import websockets
 
-from wcLidar import LidarClient
+from ..lib.wcLidar import LidarClient
 
 
 LOG_LEVEL = "WARNING"
@@ -25,15 +25,11 @@ async def cli(lidar):
     try:
         cliCmd = input("> ")
         while cliCmd:
-            '''
-            if cliCmd == 'L':
-                response = await lidar.laser(True)
-                print(f"LASER ON: {response}")
-            elif cliCmd == 'l':
-                response = await lidar.laser(False)
-                print(f"LASER OFF: {response}")
-            '''
-            if cliCmd == 'r':
+            if cliCmd == 'p':
+                names = ['angles', 'distances', 'intensities']
+                response = await lidar.scan(names)
+                print(f"SCAN: {response}")
+            elif cliCmd == 'r':
                 names = ['minRange', 'maxRange', 'minAngle', 'maxAngle', 'scanFreq', 'sampleRate']
                 response = await lidar.get(names)
                 print(f"GET: {response}")
@@ -55,9 +51,8 @@ async def cli(lidar):
                 response = await lidar.halt()
                 print(f"HALT: {response}")
             elif (cliCmd == '?') or (cliCmd == 'h'):
+                print("p: get sample points")
                 print("h: this message")
-                #print("L: turn laser on")
-                #print("l: turn laser off")
                 print("q: quit")
                 print("r: read values")
                 print("s: start lidar device")
