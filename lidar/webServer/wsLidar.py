@@ -14,10 +14,10 @@
 #    - error: {'type': 'ERROR', 'error': <errMsg>}
 #  * commands/responses
 #    - Start
-#      * {'type': 'CMD', 'command': 'start', 'port': <path>", 'baud': <int>,
+#      * {'type': 'CMD', 'command': 'options': {'start', 'port': <path>", 'baud': <int>,
 #          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
 #          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
-#          'zeroFilter': <bool>}
+#          'zeroFilter': <bool>}}
 #      * {'type': 'REPLY', 'version': <str>}
 #      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Stop
@@ -39,7 +39,7 @@
 #          'minRange': <meters>, 'maxRange': <meters>}}
 #      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Scan
-#      * {'type': 'CMD', 'command': 'scan', 'values': ['angles', 'distances', 'intensities']}
+#      * {'type': 'CMD', 'command': 'scan', 'names': ['angles', 'distances', 'intensities']}
 #      * {'type': 'REPLY', 'values': {'angles': <floatList>, 'distances': <intList>, 'intensities': <intList>}}
 #      * {'type': 'ERROR', 'error': <errMsg>}
 #    - Laser on/off
@@ -71,10 +71,12 @@ import json
 import logging
 import websockets
 
+from ..shared import MessageTypes, Commands
 import lidar
 
 #import pdb  ## pdb.set_trace()
 
+'''
 #### FIXME get this from a common location
 from enum import Enum, unique
 
@@ -94,6 +96,7 @@ class Commands(Enum):
     SCAN = 'scan'
     LASER = 'laser'
     VERSION = 'version'
+'''
 
 #### TODO consider using 'wss://' sockets
 #### TODO fix exception/exit handling
@@ -123,12 +126,12 @@ async def cmdHandler(websocket):
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
             logging.debug(f"Send Response: {response}")
             await websocket.send(json.dumps(response))
-            exit(1)
+            return True
         if msg['type'] == MessageTypes.HALT.value:
             scanner.done()
             scanner = None
             logging.info("Received Stop message, exit")
-            exit(0)
+            return False
         if msg['type'] != MessageTypes.CMD.value:
             errMsg = f"Not a command, ignoring: {msg['type']}"
             logging.warning(errMsg)
@@ -142,10 +145,14 @@ async def cmdHandler(websocket):
                 logging.warning("Device already started, ignoring Start command")
                 response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
             else:
-                if ('options' in msg) and msg['options']:
-                    scanner = lidar.Lidar(**msg['options'])
-                else:
-                    scanner = lidar.Lidar()
+                try:
+                    if ('options' in msg) and msg['options']:
+                        scanner = lidar.Lidar(**msg['options'])
+                    else:
+                        scanner = lidar.Lidar()
+                except Exception as ex:
+                    logging.error(f"Failed to attach to lidar: {ex}")
+                    return True
                 if scanner:
                     response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
                 else:
@@ -205,7 +212,7 @@ async def cmdHandler(websocket):
                         vals[k] = v
                 response = {'type': MessageTypes.REPLY.value, 'values': vals}
         elif msg['command'] == Commands.SCAN.value:
-            points = scanner.scan(msg['values'])
+            points = scanner.scan(msg['names'])
             if points:
                 response = {'type': MessageTypes.REPLY.value, 'values': points}
             else:
@@ -243,6 +250,7 @@ async def main():
     except asyncio.CancelledError:
         logging.error("Future was cancelled, exiting...")
         # Perform any necessary cleanup here
+        #### FIXME
     except Exception as ex:
         logging.error(ex)
 
@@ -260,5 +268,8 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
     except KeyboardInterrupt:
         logging.debug("Lidar Server manually stopped")
+        exit(1)
     except Exception as ex:
         logging.error(ex)
+        exit(1)
+    exit(0)
