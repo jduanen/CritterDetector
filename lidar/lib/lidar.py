@@ -25,6 +25,10 @@ import ydlidar
 #import pdb  ## pdb.set_trace()
 
 
+#### TODO
+####  * laser: setAutoIntensity, enableGlassNoise, enableSunNoise, getDeviceInfo, getUserVersion
+
+
 DEF_LOG_LEVEL = "WARNING"
 
 DEF_CONFIGS_FILE = "./.lidar.yaml"
@@ -54,7 +58,7 @@ MAX_TILT_ANGLE = 1.5   # degrees
 
 
 class Lidar():
-    LIDAR_VERSION = "1.2.0"
+    LIDAR_VERSION = "1.3.0"
 
     def __init__(self, **kwargs):
         self.port = kwargs.get('port', None)
@@ -101,6 +105,9 @@ class Lidar():
         if not ydlidar.os_isOk():
             logger.error("Laser is not OK")
             exit(1)
+        if not self.laser.turnOff():
+            logging.error("Failed to turn laser off")
+            exit(1)
         self.laserScan = ydlidar.LaserScan()
 
     def laserEnable(self, enable):
@@ -118,16 +125,12 @@ class Lidar():
                 return True
         return False
 
-    #### TODO remove this????
-    def rescan(self):
-        self.laser.turnOn()
-        self.laserScan = ydlidar.LaserScan()
-
     def _scan(self):
         ret = self.laser.doProcessSimple(self.laserScan)
         while not (ret and ydlidar.os_isOk() and self.laserScan.points):
             self.laser.turnOn()
             self.laserScan = ydlidar.LaserScan()
+            self.laser.turnOff()
             ret = self.laser.doProcessSimple(self.laserScan)
 
     def scan(self, names):
@@ -151,6 +154,13 @@ class Lidar():
         print(f"INFO: {r}")
         return(r)
     '''
+
+    def status(self):
+        stat = {'laser': None, 'ok': ydlidar.os_isOk(), 'scanning': None}
+        if self.laser:
+            stat['laser'] = True
+            stat['scanning'] = self.laser.isScanning()
+        return stat
 
     def setAngles(self, minAngle, maxAngle):
         if minAngle >= maxAngle:
@@ -222,5 +232,6 @@ class Lidar():
         return Lidar.LIDAR_VERSION
 
     def done(self):
+        ydlidar.os_shutdown()
         return (not self.laser.turnOff()) or (not self.laser.disconnecting())
 
