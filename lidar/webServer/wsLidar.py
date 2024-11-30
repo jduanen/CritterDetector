@@ -8,13 +8,15 @@
 #  * send dicts serialized to json (with json.dumps())
 #  * receive serialized json strings and deserialize to dicts (with json.loads())
 #  * message formats
-#    - halt: {'type': 'HALT'}
 #    - command: {'type': 'CMD', 'command': <cmd>, ????: <KVs>}
-#    - response: {'type': 'REPLY', ????: <returnKVs>}
+#    - status: {'type': 'STATUS'}
+#      => {'type': REPLY, 'status': {'laser': <bool>, 'ok': <bool>, 'scanner': <bool>, 'scanning': <bool>}}
+#    - reply: {'type': 'REPLY', ????: <returnKVs>}
 #    - error: {'type': 'ERROR', 'error': <errMsg>}
+#    - halt: {'type': 'HALT'}
 #  * commands/responses
-#    - Start
-#      * {'type': 'CMD', 'command': 'options': {'start', 'port': <path>", 'baud': <int>,
+#    - Initialize
+#      * {'type': 'CMD', 'command': 'options': {'init', 'port': <path>", 'baud': <int>,
 #          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
 #          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
 #          'zeroFilter': <bool>}}
@@ -69,6 +71,7 @@ import asyncio
 from enum import Enum
 import json
 import logging
+import signal
 import websockets
 
 from ..shared import MessageTypes, Commands
@@ -79,10 +82,11 @@ from ..lib.lidar import Lidar
 #### TODO consider using 'wss://' sockets
 #### TODO fix exception/exit handling
 #### TODO make version test only look at major (minor too?) value
+#### TODO make HALT work correctly
 
 LOG_LEVEL = "DEBUG"
 
-WS_LIDAR_VERSION = "1.2.0"  # N.B. Must match lidar.py library's version
+WS_LIDAR_VERSION = "1.3.0"  # N.B. Must match lidar.py library's version
 
 HOSTNAME = "0.0.0.0"
 PORTNUM = 8765
@@ -105,21 +109,39 @@ async def cmdHandler(websocket):
             await websocket.send(json.dumps(response))
             return True
         if msg['type'] == MessageTypes.HALT.value:
-            scanner.done()
-            scanner = None
+            if scanner:
+                scanner.done()
+                scanner = None
             logging.info("Received Stop message, exit")
             return False
+        if msg['type'] == MessageTypes.STATUS.value:
+            logging.debug("Received Status request message")
+            status = {}
+            if scanner:
+                status = scanner.status()
+            res = {'scanner': not scanner == None, 'status': status}
+            response = {'type': MessageTypes.REPLY.value} | res
+            logging.debug(f"Send Response: {response}")
+            await websocket.send(json.dumps(response))
+            return True
         if msg['type'] != MessageTypes.CMD.value:
             errMsg = f"Not a command, ignoring: {msg['type']}"
-            logging.warning(errMsg)
+            logging.error(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
-        elif not scanner or (msg['command'] != 'Commands.START.value'):
-            errMsg = f"Must issue start command first, ignoring: {msg}"
-            logging.warning(errMsg)
+            logging.debug(f"Send Response: {response}")
+            await websocket.send(json.dumps(response))
+            return True
+        elif not scanner and not (msg['command'] == Commands.INIT.value):
+            # not initialized and this is not a init command
+            errMsg = f"Must issue initialize command first, ignoring: {msg}"
+            logging.error(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
-        if msg['command'] == Commands.START.value:
+            logging.debug(f"Send Response: {response}")
+            await websocket.send(json.dumps(response))
+            return True
+        if msg['command'] == Commands.INIT.value:
             if scanner:
-                logging.warning("Device already started, ignoring Start command")
+                logging.warning("Device already initialized, ignoring Init command")
                 response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
             else:
                 try:
@@ -189,13 +211,23 @@ async def cmdHandler(websocket):
                         vals[k] = v
                 response = {'type': MessageTypes.REPLY.value, 'values': vals}
         elif msg['command'] == Commands.SCAN.value:
-            points = scanner.scan(msg['names'])
-            if points:
-                response = {'type': MessageTypes.REPLY.value, 'values': points}
-            else:
-                errMsg = "Failed to get requested samples"
+            if scanner.laserEnable(True):
+                errMsg = "Failed to enable laser"
                 logging.warning(errMsg)
                 response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+            else:
+                points = scanner.scan(msg['names'])
+                if scanner.laserEnable(False):
+                    errMsg = "Failed to disable laser"
+                    logging.warning(errMsg)
+                    response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+                else:
+                    if points:
+                        response = {'type': MessageTypes.REPLY.value, 'values': points}
+                    else:
+                        errMsg = "Failed to get requested samples"
+                        logging.warning(errMsg)
+                        response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.LASER.value:
             if scanner.laserEnable(msg['enable']):
                 response = {'type': MessageTypes.REPLY.value}
@@ -239,6 +271,20 @@ if __name__ == "__main__":
     if (Lidar.LIDAR_VERSION != WS_LIDAR_VERSION):  #### FIXME just check major(/minor?) number
         logging.error(f"Version mismatch: ({Lidar.LIDAR_VERSION} != {WS_LIDAR_VERSION})")
         exit(1)
+
+    def signalHandler(sig, frame):
+        ''' Catch SIGHUP to force a restart and SIGINT to stop.""
+        '''
+        if sig == signal.SIGHUP:
+            logging.info("SIGHUP")
+            #### TODO stop, reload, and restart everything
+        elif sig == signal.SIGINT:
+            logging.info("SIGINT")
+            #### TODO stop everything and exit
+            if scanner:
+                scanner.done
+                scanner = None
+            exit(1)
 
     loop = asyncio.get_event_loop()
     try:
