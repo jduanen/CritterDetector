@@ -11,9 +11,9 @@ import websockets
 from ..lib.wcLidar import LidarClient
 
 
-LOG_LEVEL = "WARNING"
+LOG_LEVEL = "DEBUG"
 
-HOSTNAME = "gpuServer1.lan"
+HOSTNAME = "bookworm.lan" # "gpuServer1.lan" # 
 PORT_NUM = 8765
 
 
@@ -25,7 +25,11 @@ async def cli(lidar):
     try:
         cliCmd = input("> ")
         while cliCmd:
-            if cliCmd == 'p':
+            if cliCmd == 'i':
+                opts = {}
+                response = await lidar.init(opts)
+                print(f"INIT: {response}")
+            elif cliCmd == 'p':
                 names = ['angles', 'distances', 'intensities']
                 response = await lidar.scan(names)
                 print(f"SCAN: {response}")
@@ -34,9 +38,8 @@ async def cli(lidar):
                 response = await lidar.get(names)
                 print(f"GET: {response}")
             elif cliCmd == 's':
-                opts = {}
-                response = await lidar.start(opts)
-                print(f"START: {response}")
+                response = await lidar.status()
+                print(f"STATUS: {response}")
             elif cliCmd == 'S':
                 response = await lidar.stop()
                 print(f"STOP: {response}")
@@ -51,11 +54,12 @@ async def cli(lidar):
                 response = await lidar.halt()
                 print(f"HALT: {response}")
             elif (cliCmd == '?') or (cliCmd == 'h'):
-                print("p: get sample points")
                 print("h: this message")
+                print("i: init lidar device")
+                print("p: get sample points")
                 print("q: quit")
                 print("r: read values")
-                print("s: start lidar device")
+                print("s: status")
                 print("S: stop lidar device")
                 print("v: get version")
                 print("w: write values")
@@ -78,18 +82,18 @@ async def main():
 ##    # create an instance using the asynchronous class method
 ##    lidar = await LidarClient.create("LidarClientInterface")
     lidar = LidarClient(HOSTNAME, PORT_NUM)
-    if await lidar.start():
+    if await lidar.init():
         return True
     return await cli(lidar)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=LOG_LEVEL)
-    logging.info("Start")
+    logging.info("Starting Web Client")
 
     if asyncio.run(main()):
         exit(1)
-    logging.info("Done")
+    logging.info("Web Client Done")
     exit(0)
 
 '''
