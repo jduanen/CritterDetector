@@ -20,6 +20,9 @@
 
 import logging
 
+from ..shared import (MIN_ANGLE, MAX_ANGLE, MIN_SAMPLE_RATE, MAX_SAMPLE_RATE,
+                      MIN_SCAN_FREQ, MAX_SCAN_FREQ)
+
 import ydlidar
 
 #import pdb  ## pdb.set_trace()
@@ -27,6 +30,11 @@ import ydlidar
 
 #### TODO
 ####  * laser: setAutoIntensity, enableGlassNoise, enableSunNoise, getDeviceInfo, getUserVersion
+####  * use asyncio and add streaming option
+####    - keep sending points until get END message
+####    - while in STREAM mode can handle: HALT and STATUS messages, as well as GET and VERSION commands
+####    - exit STREAM mode when get: INIT, STOP, SET, SCAN, LASER
+####    - N.B. lidar calls are blocking, so be careful with async
 
 
 DEF_LOG_LEVEL = "WARNING"
@@ -40,21 +48,6 @@ DEF_SCAN_FREQ = 10.0    # Hz
 DEF_MAX_RANGE = 8.0     # meters
 DEF_MIN_RANGE = 0.02    # meters
 DEF_SAMPLE_RATE = 4     # KHz
-
-MIN_ANGLE = -180.0
-MAX_ANGLE = 180.0
-MIN_RANGE = 0.02      # meters
-MAX_RANGE = 12.0      # meters
-MIN_SCAN_FREQ = 6.0   # Hz
-MAX_SCAN_FREQ = 12.0  # Hz
-MIN_SAMPLE_RATE = 1   # KHz ????
-MAX_SAMPLE_RATE = 4   # KHz ????
-
-MIN_ANGLE_RESOLUTION = 0.54  # degrees
-
-MIN_TILT_ANGLE = 0.0   # degrees
-DEF_TILT_ANGLE = 0.75  # degrees
-MAX_TILT_ANGLE = 1.5   # degrees
 
 
 class Lidar():
