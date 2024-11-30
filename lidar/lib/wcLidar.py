@@ -23,13 +23,13 @@ DEF_PING = 20
 
 
 class LidarClient():
-    WC_LIDAR_VERSION = "1.2.0"  # N.B. Must match lidar.py library's version
+    WC_LIDAR_VERSION = "1.3.0"  # N.B. Must match lidar.py library's version
 
     def __init__(self, hostname, portNum):
         self.hostname = hostname
         self.portNum = portNum
         self.uri = f"ws://{hostname}:{portNum}"
-        self.started = False
+        self.inited = False
 
     async def _sendHalt(self):
         try:
@@ -58,7 +58,7 @@ class LidarClient():
             logging.error(f"Unable to connect to lidar server: {ex}")
             return None
 
-        if ('type' not in response) or (response['type'] == 'ERROR'):
+        if ('type' not in response) or (response['type'] == MessageTypes.ERROR.value):
             logging.error(f"Bad Response message: {response}")
             return None
         if response['type'] == 'STOP':    #### TODO can this ever happen?
@@ -67,11 +67,11 @@ class LidarClient():
         logging.debug(f"Valid Response: {response}")
         return response
 
-    async def start(self, options={}):
-        if self.started:
-            logging.warning("Lidar is already running, so ignoring start command")
+    async def init(self, options={}):
+        if self.inited:
+            logging.warning("Lidar is already running, so ignoring init command")
         else:
-            response = await self._sendCmd(Commands.START.value, {'options': options})
+            response = await self._sendCmd(Commands.INIT.value, {'options': options})
             if response == None:
                 return True
             if response['version'] == LidarClient.WC_LIDAR_VERSION:        #### FIXME semver test
@@ -79,18 +79,34 @@ class LidarClient():
             else:
                 logging.error(f"Invalid Version: {response['version']} != {LidarClient.WC_LIDAR_VERSION}")
                 return True
-            self.started = True
+            self.inited = True
         return False
 
     async def stop(self):
         response = await self._sendCmd(Commands.STOP.value)
         if response == None:
             return True
-        self.started = False
+        self.inited = False
         return False
 
     async def halt(self):
         return await self._sendHalt()
+
+    async def status(self):
+        try:
+            async with websockets.connect(self.uri, ping_interval=DEF_PING, ping_timeout=DEF_PING) as websocket:
+                message = {'type': MessageTypes.STATUS.value}
+                await websocket.send(json.dumps(message))
+                logging.debug(f"Sent command: {message}")
+
+                response = json.loads(await websocket.recv())
+                logging.debug(f"Received status response: {response}")
+                if 'status' not in response:
+                    response['status'] = {}
+        except ConnectionRefusedError as ex:
+            logging.error(f"Unable to connect to lidar server: {ex}")
+            return None
+        return response['status']
 
     async def set(self, values):
         if not values:
