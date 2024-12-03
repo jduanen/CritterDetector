@@ -1,0 +1,7 @@
+dash
+dash-bootstrap-components
+dash-daq
+dash-renderer
+pandas
+plotly
+shapely
