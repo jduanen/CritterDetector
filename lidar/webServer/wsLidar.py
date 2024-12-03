@@ -84,7 +84,7 @@ from ..lib.lidar import Lidar
 #### TODO make version test only look at major (minor too?) value
 #### TODO make HALT work correctly
 
-LOG_LEVEL = "DEBUG"
+LOG_LEVEL = "INFO"  ## "DEBUG"
 
 WS_LIDAR_VERSION = "1.3.0"  # N.B. Must match lidar.py library's version
 
@@ -115,7 +115,7 @@ async def cmdHandler(websocket):
             logging.info("Received Stop message, exit")
             return False
         if msg['type'] == MessageTypes.STATUS.value:
-            logging.debug("Received Status request message")
+            logging.info("Received Status request message")
             status = {}
             if scanner:
                 status = scanner.status()
@@ -139,12 +139,14 @@ async def cmdHandler(websocket):
             logging.debug(f"Send Response: {response}")
             await websocket.send(json.dumps(response))
             return True
+        logging.info(f"Received Command message: {msg['command']}")
         if msg['command'] == Commands.INIT.value:
             if scanner:
                 logging.warning("Device already initialized, ignoring Init command")
                 response = {'type': MessageTypes.REPLY.value, 'version': WS_LIDAR_VERSION}
             else:
                 try:
+                    print(f">>>>> {msg}")
                     if ('options' in msg) and msg['options']:
                         scanner = Lidar(**msg['options'])
                     else:
