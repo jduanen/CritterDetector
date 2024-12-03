@@ -17,9 +17,9 @@ import websockets
 from ..shared import MessageTypes, Commands
 
 
-LOG_LEVEL = "DEBUG"
-
 DEF_PING = 20
+
+DEF_SCAN_NAMES = ['angles', 'distances', 'intensities']
 
 
 class LidarClient():
@@ -68,6 +68,7 @@ class LidarClient():
         return response
 
     async def init(self, options={}):
+        logging.info(f"INIT: {options}")
         if self.inited:
             logging.warning("Lidar is already running, so ignoring init command")
         else:
@@ -83,16 +84,28 @@ class LidarClient():
         return False
 
     async def stop(self):
+        logging.info("STOP")
         response = await self._sendCmd(Commands.STOP.value)
         if response == None:
+            logging.error("Failed to stop lidar")
             return True
         self.inited = False
         return False
 
+    async def reset(self, options={}):
+        logging.info("RESET")
+        if await self.stop():
+            return True
+        if await self.init(options):
+            return True
+        return False
+
     async def halt(self):
+        logging.info("HALT")
         return await self._sendHalt()
 
     async def status(self):
+        logging.info("STATUS")
         try:
             async with websockets.connect(self.uri, ping_interval=DEF_PING, ping_timeout=DEF_PING) as websocket:
                 message = {'type': MessageTypes.STATUS.value}
@@ -109,6 +122,7 @@ class LidarClient():
         return response['status']
 
     async def set(self, values):
+        logging.info("SET")
         if not values:
             logging.warning("No values to set, ignoring")
             return None
@@ -118,18 +132,23 @@ class LidarClient():
         return response['results']
 
     async def get(self, names):
+        logging.info("GET")
         response = await self._sendCmd(Commands.GET.value, {'get': names})
         if (response == None) or ('values' not in response):
             return None
         return response['values']
 
-    async def scan(self, names):
+    async def scan(self, names=DEF_SCAN_NAMES):
+        logging.info("SCAN")
         response = await self._sendCmd(Commands.SCAN.value, {'names': names})
         if (response == None) or ('values' not in response):
+            print("ERROR: xxx") #### TMP TMP TMP
             return None
+        print(f"SCAN: {response['values']}")
         return response['values']
 
     async def version(self):
+        logging.info("VERSION")
         response = await self._sendCmd(Commands.VERSION.value)
         if (response == None) or ('version' not in response):
             return None
