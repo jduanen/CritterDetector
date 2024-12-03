@@ -144,7 +144,7 @@ class LidarClient():
         if (response == None) or ('values' not in response):
             print("ERROR: xxx") #### TMP TMP TMP
             return None
-        print(f"SCAN: {response['values']}")
+#        print(f"SCAN: {response['values']}")
         return response['values']
 
     async def version(self):
