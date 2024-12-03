@@ -28,7 +28,7 @@ LOG_LEVEL = "INFO"  ## "DEBUG"
 HOSTNAME = "bookworm.lan" # "gpuServer1.lan" # 
 PORT_NUM = 8765
 
-DEF_INTERVAL = 30000  #### FIXME: 1000.0 / DEF_SCAN_FREQ  # in msecs
+DEF_INTERVAL = 10000  #### FIXME: 1000.0 / DEF_SCAN_FREQ  # in msecs
 
 EPSILON = 0.0000001
 MAX_MARGIN = 0.5
@@ -47,13 +47,6 @@ lastRanges = [minRange, maxRange]
 lastAngles = [minAngle, maxAngle]
 maxMargin = MAX_MARGIN
 minMargin = MIN_MARGIN
-
-#### vvvvvvvvvvvvvvvvvvvv TMP TMP TMP
-coords = [[0,1], [0.5,-1], [-0.5,-1], [0,1]]
-poly = Polygon(coords)
-xy = poly.exterior.coords
-xSamples, ySamples = zip(*xy)
-#### ^^^^^^^^^^^^^^^^^^^^
 
 lidar = None
 
@@ -128,6 +121,7 @@ controls = dbc.Card(
                     n_clicks=0,
                     size="sm",
                     #style={"font-size": "1.6rem"},
+#                    style={"margin-top": "20px"},
                     color="primary",
                     className="me-1",
                 ),
@@ -140,11 +134,18 @@ controls = dbc.Card(
                     value=50,
                     size="sm",
                     #style={"font-size": "1.6rem"},
+#                    style={"margin-top": "20px"},
                     className="mb-3",
                 ),
-            ]
+            ],
+            style={"margin-top": "20px"},
         ),
-        html.Button("Reset Options", id="resetButton", n_clicks=0, disabled=False),
+        html.Button("Reset Options",
+                    id="resetButton",
+                    n_clicks=0,
+                    disabled=False,
+                    style={"margin-top": "20px"}
+                   ),
         html.Hr(),
         html.H5("Display Options"),
         html.Div(
@@ -218,13 +219,51 @@ app.layout = dbc.Container(
     fluid=True,
 )
 
-app.css.append_css({"external_url": "./wc.css"})
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            ._dash-loading-callback {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            ._dash-loading-callback::after {
+                content: "Loading...";
+                color: white;
+                font-size: 24px;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 
 
 async def getSamples():
     if not lidar:
         logging.error("Lidar not initialized")
         return None  #### FIXME throw exception
+    app.config.suppress_callback_exceptions = False
     samples = await lidar.scan()
     #### TODO Fix this
     '''
@@ -237,7 +276,6 @@ async def getSamples():
     poly = Polygon(cartCoords)
     xy = poly.exterior.coords
     xSamples, ySamples = zip(*xy)
-    print(f"SSSSSSSSSSSSSSSS: {len(xSamples)}")
 
     fig = go.Figure(
         data=[
@@ -256,6 +294,7 @@ async def getSamples():
             "yaxis_range": [-lastRanges[1], lastRanges[1]],
         }
     )
+    app.config.suppress_callback_exceptions = True
     return fig
 
 @app.callback(
@@ -267,9 +306,12 @@ async def getSamples():
 def resetOptions(numClicks):
     opts = {'options': {'minAngle': MIN_ANGLE, 'maxAngle': MAX_ANGLE,
                         'minRange': MIN_RANGE, 'maxRange': MAX_RANGE}}
+    if not lidar:
+        logging.error("Lidar not initialized")
+        return None, None, None
     if asyncio.run(lidar.reset(opts)):
         logging.error("Failed to init lidar")
-        return -1
+        return None, None, None
     ranges = [MIN_RANGE, MAX_RANGE]
     angles = [MIN_ANGLE, MAX_ANGLE]
     return ranges, angles, numClicks
@@ -322,7 +364,6 @@ def update(ranges, angles, margins, intersect, options, intensityEnb, numInterva
         print("SAMPLE")  #### TODO
 #        print(f"intensityEnb: {intensityEnb}")
         fig = asyncio.run(getSamples())
-        print("IIIIIIIIIIIIIII")
     '''
     elif OPTS_MARGIN in options:
         print("MARGIN")  #### TODO
