@@ -9,18 +9,26 @@
 ####  * use the wcLidar library instead of direct-access
 ####  * figure out how to make asyncio and Dash play together properly
 
-
+import asyncio
 import dash_bootstrap_components as dbc
 from dash import Dash, html, dash_table, dcc, callback, ctx, Input, Output, State
 import dash_daq as daq
+import logging
 import plotly.graph_objs as go
 from shapely import union_all
 from shapely.geometry import Polygon, MultiPolygon
 import numpy as np
 
-from ..shared import MIN_ANGLE, MAX_ANGLE
-import wcLidar
+from  ..shared import MIN_ANGLE, MAX_ANGLE, MIN_RANGE, MAX_RANGE
+from ..lib.wcLidar import LidarClient
 
+
+LOG_LEVEL = "INFO"  ## "DEBUG"
+
+HOSTNAME = "bookworm.lan" # "gpuServer1.lan" # 
+PORT_NUM = 8765
+
+DEF_INTERVAL = 30000  #### FIXME: 1000.0 / DEF_SCAN_FREQ  # in msecs
 
 EPSILON = 0.0000001
 MAX_MARGIN = 0.5
@@ -40,17 +48,14 @@ lastAngles = [minAngle, maxAngle]
 maxMargin = MAX_MARGIN
 minMargin = MIN_MARGIN
 
-#### TMP TMP TMP
+#### vvvvvvvvvvvvvvvvvvvv TMP TMP TMP
 coords = [[0,1], [0.5,-1], [-0.5,-1], [0,1]]
 poly = Polygon(coords)
 xy = poly.exterior.coords
 xSamples, ySamples = zip(*xy)
+#### ^^^^^^^^^^^^^^^^^^^^
 
-scanner = None
-
-isLaserOn = False
-
-#fig = go.Figure()
+lidar = None
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
@@ -139,6 +144,7 @@ controls = dbc.Card(
                 ),
             ]
         ),
+        html.Button("Reset Options", id="resetButton", n_clicks=0, disabled=False),
         html.Hr(),
         html.H5("Display Options"),
         html.Div(
@@ -169,6 +175,16 @@ controls = dbc.Card(
                     id="intensityEnb",
                 ),
             ],
+        ),
+        html.Div(
+            [
+                dcc.Interval(
+                    id='interval',
+                    interval=DEF_INTERVAL,  #### FIXME make a function of scan rate
+                    n_intervals=0
+                ),
+                html.Div(id='outputDiv')
+            ]
         ),
     ],
     body=True,
@@ -202,19 +218,26 @@ app.layout = dbc.Container(
     fluid=True,
 )
 
+app.css.append_css({"external_url": "./wc.css"})
 
-def getSamples():
-    if not scanner:
-        print("NO SAMPLES")
-        return None, None  ##xSamples = ySamples = [(0, 0)]
 
-    angles, distances, intensity = scanner.scanIntensity()
+async def getSamples():
+    if not lidar:
+        logging.error("Lidar not initialized")
+        return None  #### FIXME throw exception
+    samples = await lidar.scan()
+    #### TODO Fix this
+    '''
+    if (any(elem is None or elem == [] for elem in [angles, distances, intensitites])):
+        logging.warning("No lidar samples returned, skipping")
+        return go.Figure()
+    '''
     polarToCartesian = lambda theta, r: ((r * np.cos(theta)), (r * np.sin(theta)))
-    cartCoords = [polarToCartesian(theta, r) for theta, r in zip(angles, distances)]
+    cartCoords = [polarToCartesian(theta, r) for theta, r in zip(samples['angles'], samples['distances'])]
     poly = Polygon(cartCoords)
     xy = poly.exterior.coords
     xSamples, ySamples = zip(*xy)
-    print(f"SSSSSS: {len(xSamples)}")
+    print(f"SSSSSSSSSSSSSSSS: {len(xSamples)}")
 
     fig = go.Figure(
         data=[
@@ -236,6 +259,22 @@ def getSamples():
     return fig
 
 @app.callback(
+    Output("lidarRanges", "value"),
+    Output("lidarAngles", "value"),
+    Output("resetButton", "n_clicks"),
+    Input("resetButton", "n_clicks"),
+)
+def resetOptions(numClicks):
+    opts = {'options': {'minAngle': MIN_ANGLE, 'maxAngle': MAX_ANGLE,
+                        'minRange': MIN_RANGE, 'maxRange': MAX_RANGE}}
+    if asyncio.run(lidar.reset(opts)):
+        logging.error("Failed to init lidar")
+        return -1
+    ranges = [MIN_RANGE, MAX_RANGE]
+    angles = [MIN_ANGLE, MAX_ANGLE]
+    return ranges, angles, numClicks
+
+@app.callback(
     Output("lidarDisplay", "figure"),
     Input("lidarRanges", "value"),
     Input("lidarAngles", "value"),
@@ -243,55 +282,66 @@ def getSamples():
     Input("intersectFrames", "n_clicks"),
     Input("displayOptions", "value"),
     Input("intensityEnb", "value"),
+    Input("interval", "n_intervals"),
     State("numFrames", "value"),
 )
-def update(ranges, angles, margins, intersect, options, intensityEnb, numFrames):
-    global lastRanges, lastAngles, scanner
+def update(ranges, angles, margins, intersect, options, intensityEnb, numIntervals, numFrames):
+    global lastRanges, lastAngles, lidar
 
-    if options:
-        scanner = lidar.Lidar(zeroFilter=True)  #### FIXME
-    else:
-        scanner = None
+    if not lidar:
+        lidar = LidarClient(HOSTNAME, PORT_NUM)
+        if asyncio.run(lidar.init()):
+            logging.error("Failed to init")
+            return None
 
     if ranges and (ranges != lastRanges):
         print(f"minR: {ranges[0]}, maxR: {ranges[1]}")
         lastRanges = ranges
-        if scanner:
-            scanner.setRanges(ranges[0], ranges[1])
-            print(f"RRRRRR: {scanner.getRanges()[0]}, {scanner.getRanges()[1]}")
+        r = asyncio.run(lidar.set({'minRange': ranges[0], 'maxRange': ranges[1]}))
+        logging.debug(f"Set Ranges response: {r}")
+        if not r:
+            logging.warning("Set Ranges failed")
+            return None
 
     if angles and (angles != lastAngles):
         print(f"minA: {angles[0]}, maxA: {angles[1]}")
         lastAngles = angles
-        if scanner:
-            scanner.setAngles(angles[0], angles[1])
-            print(f"AAAAAA: {scanner.getAngles()[0]}, {scanner.getAngles()[1]}")
+        r = asyncio.run(lidar.set({'minAngle': ranges[0], 'maxAngle': ranges[1]}))
+        logging.debug(f"Set Angles response: {r}")
+        if not r:
+            logging.warning("Set Angles failed")
+            return None
 
-    print(f"margins: {margins}")
-    print(f"intersect: {intersect}, numFrames: {numFrames}")
+#    print(f"margins: {margins}")  #### TODO
+
+#    print(f"intersect: {intersect}, numFrames: {numFrames}")  #### TODO
 
     print(f"displayOptions: {options}")
     fig = None
     if OPTS_SAMPLE in options:
-        print("SAMPLE")
-        print(f"intensityEnb: {intensityEnb}")
-        fig = getSamples()
+        print("SAMPLE")  #### TODO
+#        print(f"intensityEnb: {intensityEnb}")
+        fig = asyncio.run(getSamples())
+        print("IIIIIIIIIIIIIII")
+    '''
     elif OPTS_MARGIN in options:
-        print("MARGIN")
+        print("MARGIN")  #### TODO
     elif OPTS_REGION in options:
-        print("REGION")
+        print("REGION")  #### TODO
     elif OPTS_OUTSIDE in options:
-        print("OUTSIDE")
+        print("OUTSIDE")  #### TODO
+    '''
 
     return fig if fig else go.Figure()
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=LOG_LEVEL)
+    logging.info("Starting Web Client")
+
     app.run_server(debug=True, port=8050)
 
-    #### FIXME this won't work
-#    if scanner:
-#        scanner.done()
+    exit(0)
 
 '''
 vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
