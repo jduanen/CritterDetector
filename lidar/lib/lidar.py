@@ -95,9 +95,6 @@ class Lidar():
         if not self.laser.turnOn():
             logging.error("Failed to turn laser on")
             exit(1)
-        if not ydlidar.os_isOk():
-            logger.error("Laser is not OK")
-            exit(1)
         if not self.laser.turnOff():
             logging.error("Failed to turn laser off")
             exit(1)
