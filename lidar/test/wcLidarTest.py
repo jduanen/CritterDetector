@@ -37,6 +37,9 @@ async def cli(lidar):
                 names = ['minRange', 'maxRange', 'minAngle', 'maxAngle', 'scanFreq', 'sampleRate']
                 response = await lidar.get(names)
                 print(f"GET: {response}")
+            elif cliCmd == 'R':
+                response = await lidar.reset()
+                print(f"RESET: {response}")
             elif cliCmd == 's':
                 response = await lidar.status()
                 print(f"STATUS: {response}")
@@ -59,6 +62,7 @@ async def cli(lidar):
                 print("p: get sample points")
                 print("q: quit")
                 print("r: read values")
+                print("R: reset lidar device")
                 print("s: status")
                 print("S: stop lidar device")
                 print("v: get version")
