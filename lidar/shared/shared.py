@@ -37,4 +37,5 @@ class Commands(Enum):
     GET = 'get'
     SCAN = 'scan'
     LASER = 'laser'
+    STREAM = 'stream'
     VERSION = 'version'
