@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-'''
 ################################################################################
 #
 # YDLIDAR Lidar (T-mini Pro) Scanner Library with Web Sockets interface
@@ -65,7 +64,6 @@
 # * Operating temperature: -10C (min), 40C (max)
 # 
 ################################################################################
-'''
 
 import asyncio
 from enum import Enum
@@ -237,6 +235,8 @@ async def cmdHandler(websocket):
                 errMsg = "Failed to turn laser on/off"
                 logging.warning(errMsg)
                 response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+        elif msg['command'] == Commands.STREAM.value:
+            pass  #### FIXME
         elif msg['command'] == Commands.VERSION.value:
             version = scanner.getVersion()
             if version:
