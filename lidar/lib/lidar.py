@@ -35,6 +35,7 @@ import ydlidar
 ####    - while in STREAM mode can handle: HALT and STATUS messages, as well as GET and VERSION commands
 ####    - exit STREAM mode when get: INIT, STOP, SET, SCAN, LASER
 ####    - N.B. lidar calls are blocking, so be careful with async
+####  * make this error out properly if the device isn't found in /dev/tty????
 
 
 DEF_LOG_LEVEL = "WARNING"
@@ -104,9 +105,6 @@ class Lidar():
         if enable:
             if not self.laser.turnOn():
                 logging.error("Failed to turn laser on")
-                return True
-            if not ydlidar.os_isOk():
-                logging.error("Laser not OK")
                 return True
             self.laserScan = ydlidar.LaserScan()
         else:
