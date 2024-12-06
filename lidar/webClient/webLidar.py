@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+################################################################################
 #
 # Dash-/Torch-/Plotly-/Shapely-/Browser-based Lidar application
 #
 # N.B. Dash is multi-threaded, need to use dcc.Store() objects instead of globals
 #
+################################################################################
 
 #### TODO
 ####  * use the wcLidar library instead of direct-access
