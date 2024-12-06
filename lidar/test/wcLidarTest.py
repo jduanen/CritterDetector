@@ -29,6 +29,13 @@ async def cli(lidar):
                 opts = {}
                 response = await lidar.init(opts)
                 print(f"INIT: {response}")
+            elif cliCmd == 'm':
+                names = ['intensities']
+                i = 0
+                for _ in range(10):
+                    i += 1
+                    response = await lidar.scan(names)
+                    print(f"STREAM ({i}): {response}")
             elif cliCmd == 'p':
                 names = ['angles', 'distances', 'intensities']
                 response = await lidar.scan(names)
@@ -59,6 +66,7 @@ async def cli(lidar):
             elif (cliCmd == '?') or (cliCmd == 'h'):
                 print("h: this message")
                 print("i: init lidar device")
+                print("m: stream")
                 print("p: get sample points")
                 print("q: quit")
                 print("r: read values")
