@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-'''
 ################################################################################
 #
 # YDLIDAR (T-mini Pro) Lidar Scanner Library
-#
-# Specs:
-# * Laser wavelength: 895-915nm (905nm typ)
-# * Laser power: 16W (max) Class I
-# * Supply power: 5V
-# * Current:
-#   - startup: 1A (peak), .84A (typ)
-#   - working: 340mA (typ), 480mA (peak)
-#   - sleeping: 45mA (max)
-# * Angle reference: 0 degs is direction of arrow on top (right side, connector down)
-# * Operating temperature: -10C (min), 40C (max)
 # 
 ################################################################################
-'''
 
 import logging
 
@@ -65,6 +52,7 @@ class Lidar():
         self.minRange = kwargs.get('minRange', DEF_MIN_RANGE)
         self.zeroFilter = kwargs.get('zeroFilter', True)
         self.laserScan = None
+        self.numScans = None
 
         ydlidar.os_init()
 
@@ -100,6 +88,7 @@ class Lidar():
             logging.error("Failed to turn laser off")
             exit(1)
         self.laserScan = ydlidar.LaserScan()
+        self.streaming = False
 
     def laserEnable(self, enable):
         if enable:
@@ -111,19 +100,23 @@ class Lidar():
             if not self.laser.turnOff():
                 logging.error("Failed to turn laser off")
                 return True
+            self.streaming = False
         return False
 
-    def _scan(self):
+    def scan(self, names=['angles', 'distances', 'intensities']):
+        print("SCAN:::::::::")
+        self.streaming = False
         ret = self.laser.doProcessSimple(self.laserScan)
+        print(f"> {ret}, {ydlidar.os_isOk()}, {self.laserScan.points}")
         while not (ret and ydlidar.os_isOk() and self.laserScan.points):
             self.laser.turnOn()
             self.laserScan = ydlidar.LaserScan()
             self.laser.turnOff()
             ret = self.laser.doProcessSimple(self.laserScan)
+            print(f">> {ret}, {ydlidar.os_isOk()}, {self.laserScan.points}")
 
-    def scan(self, names):
-        self._scan()
         angles, distances, intensities = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
+
         results = {}
         if 'angles' in names:
             results['angles'] = angles
@@ -132,6 +125,13 @@ class Lidar():
         if 'intensities' in names:
             results['intensities'] = intensities
         return results
+
+    def stream(self, names):
+        self.streaming = True
+        self.numScans = 0
+        while self.streaming:
+            numScans += 1
+            yield self.scan(names)
 
     '''
     def info(self):
@@ -144,7 +144,11 @@ class Lidar():
     '''
 
     def status(self):
-        stat = {'laser': None, 'ok': ydlidar.os_isOk(), 'scanning': None}
+        stat = {'laser': None, 'ok': ydlidar.os_isOk(), 'scanning': None,
+                'streaming': self.streaming, 'numScans': self.numScans,
+                'minAngle': self.minAngle, 'maxAngle': self.maxAngle, 
+                'minRange': self.minRange, 'maxRange': self.maxRange,
+                'scanFreq': self.scanFreq, 'sampleRate': self.sampleRate}
         if self.laser:
             stat['laser'] = True
             stat['scanning'] = self.laser.isScanning()
@@ -220,6 +224,11 @@ class Lidar():
         return Lidar.LIDAR_VERSION
 
     def done(self):
+        self.streaming = False
         ydlidar.os_shutdown()
-        return (not self.laser.turnOff()) or (not self.laser.disconnecting())
+        res = (not self.laser.turnOff()) or (not self.laser.disconnecting())
+        self.laser = None
+        self.laserScan = None
+        self.laserEnable = False
+        return res
 
