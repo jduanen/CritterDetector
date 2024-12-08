@@ -5,6 +5,9 @@
 from enum import Enum, unique
 
 
+COMMAND_PORT = 8765
+DATA_PORT    = 8766
+
 MIN_ANGLE = -180.0
 MAX_ANGLE = 180.0
 MIN_RANGE = 0.02      # meters
