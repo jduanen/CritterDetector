@@ -2,68 +2,14 @@
 ################################################################################
 #
 # YDLIDAR Lidar (T-mini Pro) Scanner Library with Web Sockets interface
-#
-# WS Interface:
-#  * send dicts serialized to json (with json.dumps())
-#  * receive serialized json strings and deserialize to dicts (with json.loads())
-#  * message formats
-#    - command: {'type': 'CMD', 'command': <cmd>, ????: <KVs>}
-#    - status: {'type': 'STATUS'}
-#      => {'type': REPLY, 'status': {'laser': <bool>, 'ok': <bool>, 'scanner': <bool>, 'scanning': <bool>}}
-#    - reply: {'type': 'REPLY', ????: <returnKVs>}
-#    - error: {'type': 'ERROR', 'error': <errMsg>}
-#    - halt: {'type': 'HALT'}
-#  * commands/responses
-#    - Initialize
-#      * {'type': 'CMD', 'command': 'options': {'init', 'port': <path>", 'baud': <int>,
-#          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
-#          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
-#          'zeroFilter': <bool>}}
-#      * {'type': 'REPLY', 'version': <str>}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#    - Stop
-#      * {'type': 'CMD', 'command': 'stop'}
-#      * {'type': 'REPLY'}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#    - Set values
-#      * {'type': 'CMD', 'command': 'set', 'set': {'scanFreq': <KHz>, 'sampleRate': <Hz>,
-#          'minAngle': <deg>, 'maxAngle': <deg>, 'minRange': <m>, 'maxRange': <m>}
-#      * {'type': 'REPLY', 'results': {'scanFreq': <bool>,
-#          'sampleRate': <bool>, 'minAngle': <bool>, 'maxAngle': <bool>,
-#          'minRange': <bool>, 'maxRange': <bool>}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#    - Get value(s)
-#      * {'type': 'CMD', 'command': 'get', 'get': ['scanFreq', 'sampleRate',
-#          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
-#      * {'type': 'REPLY', 'values': {'scanFreq': <Hz>, 'sampleRate': <KHz>,
-#          'minAngle': <degrees>, 'maxAngle': <degrees>,
-#          'minRange': <meters>, 'maxRange': <meters>}}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#    - Scan
-#      * {'type': 'CMD', 'command': 'scan', 'names': ['angles', 'distances', 'intensities']}
-#      * {'type': 'REPLY', 'values': {'angles': <floatList>, 'distances': <intList>, 'intensities': <intList>}}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#    - Laser on/off
-#      * {'type': 'CMD', 'command': 'laser', 'enable': <bool>}
-#      * {'type': 'REPLY'}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#    - Version
-#      * {'type': 'CMD', 'command': 'version'}
-#      * {'type': 'REPLY', 'version': <str>}
-#      * {'type': 'ERROR', 'error': <errMsg>}
-#
-# Specs:
-# * Laser wavelength: 895-915nm (905nm typ)
-# * Laser power: 16W (max) Class I
-# * Supply power: 5V
-# * Current:
-#   - startup: 1A (peak), .84A (typ)
-#   - working: 340mA (typ), 480mA (peak)
-#   - sleeping: 45mA (max)
-# * Angle reference: 0 degs is direction of arrow on top (right side, connector down)
-# * Operating temperature: -10C (min), 40C (max)
 # 
 ################################################################################
+
+#### TODO consider using 'wss://' sockets
+####  * fix exception/exit handling
+####  * make version test only look at major (minor too?) value
+####  * make HALT work correctly
+####  * figure out how to make sending response block -- to maintain association of cmd & response
 
 import asyncio
 from enum import Enum
@@ -72,26 +18,22 @@ import logging
 import signal
 import websockets
 
-from ..shared import MessageTypes, Commands
+from ..shared import MessageTypes, Commands, COMMAND_PORT, DATA_PORT
 from ..lib.lidar import Lidar
 
 #import pdb  ## pdb.set_trace()
 
-#### TODO consider using 'wss://' sockets
-#### TODO fix exception/exit handling
-#### TODO make version test only look at major (minor too?) value
-#### TODO make HALT work correctly
 
 LOG_LEVEL = "INFO"  ## "DEBUG"
 
 WS_LIDAR_VERSION = "1.3.0"  # N.B. Must match lidar.py library's version
 
 HOSTNAME = "0.0.0.0"
-PORTNUM = 8765
 
 PING = 20
 
 scanner = None
+cmdServer = dataServer = None
 
 
 async def cmdHandler(websocket):
@@ -109,7 +51,10 @@ async def cmdHandler(websocket):
         if msg['type'] == MessageTypes.HALT.value:
             if scanner:
                 scanner.done()
-                scanner = None
+            if cmdServer:
+                cmdServer.close()
+            if dataServer:
+                dataServer.close()
             logging.info("Received Stop message, exit")
             return False
         if msg['type'] == MessageTypes.STATUS.value:
@@ -236,7 +181,25 @@ async def cmdHandler(websocket):
                 logging.warning(errMsg)
                 response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.STREAM.value:
-            pass  #### FIXME
+            if scanner.laserEnable(True):
+                errMsg = "Failed to enable laser"
+                logging.warning(errMsg)
+                response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+            else:
+                while True:
+                    points = scanner.scan(msg['names'])
+                    print("STREAM: scan")
+                    if points:
+                        response = {'type': MessageTypes.REPLY.value, 'values': points}
+                        await websocket.send(json.dumps(response))  #### TODO should I block here?
+                        print("STREAM: responded")
+                    else:
+                        errMsg = "Failed to get requested samples"
+                        logging.warning(errMsg)
+                        response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+                        print("STREAM: finished")
+                        break
+            print("STREAM: done")
         elif msg['command'] == Commands.VERSION.value:
             version = scanner.getVersion()
             if version:
@@ -250,20 +213,20 @@ async def cmdHandler(websocket):
             logging.warning(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         logging.debug(f"Send Response: {response}")
-        await websocket.send(json.dumps(response))
+        await websocket.send(json.dumps(response))  #### TODO should I block here?
+
+async def dataHandler(websocket):
+    #### FIXME
+    print("DATA HANDLER")
+    await websocket.send("X")
 
 async def main():
-    try:
-        # loop forever
-        async with websockets.serve(cmdHandler, HOSTNAME, PORTNUM, ping_interval=PING, ping_timeout=PING):
-            future = asyncio.get_running_loop().create_future()
-            await future
-    except asyncio.CancelledError:
-        logging.error("Future was cancelled, exiting...")
-        # Perform any necessary cleanup here
-        #### FIXME
-    except Exception as ex:
-        logging.error(ex)
+    global cmdServer, dataServer
+
+    cmdServer = await websockets.serve(cmdHandler, HOSTNAME, COMMAND_PORT, ping_interval=PING, ping_timeout=PING)
+    dataServer = await websockets.serve(dataHandler, HOSTNAME, DATA_PORT, ping_interval=PING, ping_timeout=PING)
+    await asyncio.gather(cmdServer.wait_closed(), dataServer.wait_closed())
+    logging.debug("Done, exiting")
 
 
 if __name__ == "__main__":
@@ -288,9 +251,8 @@ if __name__ == "__main__":
                 scanner = None
             exit(1)
 
-    loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         logging.debug("Lidar Server manually stopped")
         exit(1)
