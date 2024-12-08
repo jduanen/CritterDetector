@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
+################################################################################
 #
 # Lidar Web Client Library test
 #
+################################################################################
 
 import asyncio
 import json
 import logging
 import websockets
 
+from ..shared import COMMAND_PORT, DATA_PORT
 from ..lib.wcLidar import LidarClient
 
 
 LOG_LEVEL = "DEBUG"
 
 HOSTNAME = "bookworm.lan" # "gpuServer1.lan" # 
-PORT_NUM = 8765
 
 
 async def ainput(prompt=""):
@@ -30,11 +32,10 @@ async def cli(lidar):
                 response = await lidar.init(opts)
                 print(f"INIT: {response}")
             elif cliCmd == 'm':
+                #### FIXME
                 names = ['intensities']
-                i = 0
-                for _ in range(10):
-                    i += 1
-                    response = await lidar.scan(names)
+                for i in range(3):
+                    response = await lidar.stream(names)
                     print(f"STREAM ({i}): {response}")
             elif cliCmd == 'p':
                 names = ['angles', 'distances', 'intensities']
@@ -93,7 +94,7 @@ async def main():
 
 ##    # create an instance using the asynchronous class method
 ##    lidar = await LidarClient.create("LidarClientInterface")
-    lidar = LidarClient(HOSTNAME, PORT_NUM)
+    lidar = LidarClient(HOSTNAME, COMMAND_PORT, DATA_PORT)
     if await lidar.init():
         return True
     return await cli(lidar)
