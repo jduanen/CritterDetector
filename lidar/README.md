@@ -2,6 +2,19 @@
 
 **TBD**
 
+## Lidar Devices
+
+* YDLIDAR (T-mini Pro)
+  - Laser wavelength: 895-915nm (905nm typ)
+  - Laser power: 16W (max) Class I
+  - Supply power: 5V
+  - Current:
+    * startup: 1A (peak), .84A (typ)
+    * working: 340mA (typ), 480mA (peak)
+    * sleeping: 45mA (max)
+  - Angle reference: 0 degs is direction of arrow on top (right side, connector down)
+  - Operating temperature: -10C (min), 40C (max)
+
 ## Design Notes
 
 * Requirements
@@ -66,5 +79,52 @@
   - client components (i.e., library and application) are intended to be run on a (desktop) server
   - GUI is offered by the server to arbitrary devices with a browser
 
-
-
+#
+# WS Interface:
+#  * send dicts serialized to json (with json.dumps())
+#  * receive serialized json strings and deserialize to dicts (with json.loads())
+#  * message formats
+#    - command: {'type': 'CMD', 'command': <cmd>, ????: <KVs>}
+#    - status: {'type': 'STATUS'}
+#      => {'type': REPLY, 'status': {'laser': <bool>, 'ok': <bool>, 'scanner': <bool>, 'scanning': <bool>}}
+#    - reply: {'type': 'REPLY', ????: <returnKVs>}
+#    - error: {'type': 'ERROR', 'error': <errMsg>}
+#    - halt: {'type': 'HALT'}
+#  * commands/responses
+#    - Initialize
+#      * {'type': 'CMD', 'command': 'options': {'init', 'port': <path>", 'baud': <int>,
+#          'scanFreq': <Hz>, 'sampleRate': <KHz>, 'minAngle': <degrees>,
+#          'maxAngle': <degrees>, 'minRange': <meters>, 'maxRange': <meters>,
+#          'zeroFilter': <bool>}}
+#      * {'type': 'REPLY', 'version': <str>}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Stop
+#      * {'type': 'CMD', 'command': 'stop'}
+#      * {'type': 'REPLY'}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Set values
+#      * {'type': 'CMD', 'command': 'set', 'set': {'scanFreq': <KHz>, 'sampleRate': <Hz>,
+#          'minAngle': <deg>, 'maxAngle': <deg>, 'minRange': <m>, 'maxRange': <m>}
+#      * {'type': 'REPLY', 'results': {'scanFreq': <bool>,
+#          'sampleRate': <bool>, 'minAngle': <bool>, 'maxAngle': <bool>,
+#          'minRange': <bool>, 'maxRange': <bool>}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Get value(s)
+#      * {'type': 'CMD', 'command': 'get', 'get': ['scanFreq', 'sampleRate',
+#          'minAngle', 'maxAngle', 'minRange', 'maxRange']}
+#      * {'type': 'REPLY', 'values': {'scanFreq': <Hz>, 'sampleRate': <KHz>,
+#          'minAngle': <degrees>, 'maxAngle': <degrees>,
+#          'minRange': <meters>, 'maxRange': <meters>}}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Scan
+#      * {'type': 'CMD', 'command': 'scan', 'names': ['angles', 'distances', 'intensities']}
+#      * {'type': 'REPLY', 'values': {'angles': <floatList>, 'distances': <intList>, 'intensities': <intList>}}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Laser on/off
+#      * {'type': 'CMD', 'command': 'laser', 'enable': <bool>}
+#      * {'type': 'REPLY'}
+#      * {'type': 'ERROR', 'error': <errMsg>}
+#    - Version
+#      * {'type': 'CMD', 'command': 'version'}
+#      * {'type': 'REPLY', 'version': <str>}
+#      * {'type': 'ERROR', 'error': <errMsg>}
