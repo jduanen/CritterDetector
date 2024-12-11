@@ -36,7 +36,10 @@ async def cli(lidar):
                 names = ['intensities']
                 for i in range(3):
                     response = await lidar.stream(names)
-                    print(f"STREAM ({i}): {response}")
+                    print(f"stream ({i}): {response}")
+                print("stream stopping...")
+                response = await lidar.stop()
+                print("stream done")
             elif cliCmd == 'p':
                 names = ['angles', 'distances', 'intensities']
                 response = await lidar.scan(names)
