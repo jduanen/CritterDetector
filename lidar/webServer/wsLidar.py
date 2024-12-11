@@ -34,6 +34,7 @@ PING = 20
 
 scanner = None
 cmdServer = dataServer = None
+dataSocket = None
 
 
 async def cmdHandler(websocket):
@@ -186,19 +187,17 @@ async def cmdHandler(websocket):
                 logging.warning(errMsg)
                 response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
             else:
-                while True:
-                    points = scanner.scan(msg['names'])
-                    print("STREAM: scan")
-                    if points:
-                        response = {'type': MessageTypes.REPLY.value, 'values': points}
-                        await websocket.send(json.dumps(response))  #### TODO should I block here?
-                        print("STREAM: responded")
-                    else:
-                        errMsg = "Failed to get requested samples"
-                        logging.warning(errMsg)
-                        response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
-                        print("STREAM: finished")
-                        break
+                response = {'type': MessageTypes.REPLY.value}
+            await websocket.send(json.dumps(response))  #### TODO should I block here?
+
+            pointsGen = scanner.stream(msg['names'])
+            for points in pointsGen:
+                if points:
+                    response = {'type': MessageTypes.REPLY.value, 'values': points}
+                    #### TODO send points on data socket -- binary or JSON????
+                    await dataSocket.send(json.dumps(response))  #### TODO should I block here?
+                else:
+                    logging.warning("Failed to get streaming samples, continuing...")
             print("STREAM: done")
         elif msg['command'] == Commands.VERSION.value:
             version = scanner.getVersion()
@@ -216,9 +215,8 @@ async def cmdHandler(websocket):
         await websocket.send(json.dumps(response))  #### TODO should I block here?
 
 async def dataHandler(websocket):
-    #### FIXME
+    dataSocket = websocket
     print("DATA HANDLER")
-    await websocket.send("X")
 
 async def main():
     global cmdServer, dataServer

@@ -28,7 +28,6 @@ class LidarClient():
         self.dataPort = dataPort
         self.cmdURI = f"ws://{hostname}:{cmdPort}"
         self.dataURI = f"ws://{hostname}:{dataPort}"
-        self.dataSocket = websockets.connect(self.dataURI, ping_interval=DEF_PING, ping_timeout=DEF_PING)
         self.inited = False
         self.streaming = False
 
@@ -152,21 +151,25 @@ class LidarClient():
         return response['values']
 
     async def stream(self, names=DEF_SCAN_NAMES):
-        #### FIXME
-        print("XXXXXXXXXXXXXXXXXXXXXXX")
-        self.streaming = True
         logging.info("STREAM")
-        response = await self._sendCmd(Commands.STREAM.value, {'names': names})
-        while True:
-            try:
-                response = await dataSocket.recv()
-                print(f"STREAM: {response}")
-#                yield response
-                return response
-            except websockets.exceptions.ConnectionClosed:
-                print("DATA CONNECTION CLOSED")  #### FIXME
-                self.streaming = False
-                break
+        self.streaming = True
+        try:
+            async with websockets.connect(self.dataURI, ping_interval=DEF_PING, ping_timeout=DEF_PING) as dataSocket:
+                print("STREAM READY")
+                response = await self._sendCmd(Commands.STREAM.value, {'names': names})
+                while True:
+                    try:
+                        response = await dataSocket.recv()
+                        print(f"STREAM: {response}")
+                        return response
+#                        yield response
+                    except websockets.exceptions.ConnectionClosed:
+                        print("DATA CONNECTION CLOSED")  #### FIXME
+                        break
+                print("STREAMING DONE")
+        except ConnectionRefusedError as ex:
+            logging.error(f"Unable to connect to lidar server data socket: {ex}")
+        self.streaming = False
 
     async def version(self):
         logging.info("VERSION")

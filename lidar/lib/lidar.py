@@ -115,7 +115,7 @@ class Lidar():
             ret = self.laser.doProcessSimple(self.laserScan)
             print(f">> {ret}, {ydlidar.os_isOk()}, {self.laserScan.points}")
 
-        angles, distances, intensities = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not ((self.zeroFilter) and (p.range <= 0))])
+        angles, distances, intensities = zip(*[(p.angle, p.range, int(p.intensity)) for p in self.laserScan.points if not (self.zeroFilter and (p.range <= 0))])
 
         results = {}
         if 'angles' in names:
@@ -127,11 +127,29 @@ class Lidar():
         return results
 
     def stream(self, names):
+        print("STREAM!!!!!!!!!!!!!!!!!!!!!")
         self.streaming = True
         self.numScans = 0
         while self.streaming:
-            numScans += 1
-            yield self.scan(names)
+            self.numScans += 1
+            ret = self.laser.doProcessSimple(self.laserScan)
+            print(f"::::: {ret}, {ydlidar.os_isOk()}, {self.laserScan.points}")
+            if not (ret and ydlidar.os_isOk() and self.laserScan.points):
+                print("^")
+                yield None
+            results = {name: [] for name in names}
+            for p in self.laserScan.points:
+                if self.zeroFilter and (p.range <= 0):
+                    #### TODO add info here?
+                    continue
+                if 'angles' in names:
+                    results['angles'].append(p.angle)
+                if 'distances' in names:
+                    results['distances'].append(p.range)
+                if 'intensities' in names:
+                    results['intensities'].append(int(p.intensity))
+            print("TTTTTT")
+            yield results
 
     '''
     def info(self):
