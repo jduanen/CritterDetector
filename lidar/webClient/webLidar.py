@@ -21,14 +21,13 @@ from shapely import union_all
 from shapely.geometry import Polygon, MultiPolygon
 import numpy as np
 
-from  ..shared import MIN_ANGLE, MAX_ANGLE, MIN_RANGE, MAX_RANGE
+from  ..shared import MIN_ANGLE, MAX_ANGLE, MIN_RANGE, MAX_RANGE, COMMAND_PORT, DATA_PORT
 from ..lib.wcLidar import LidarClient
 
 
 LOG_LEVEL = "INFO"  ## "DEBUG"
 
 HOSTNAME = "bookworm.lan" # "gpuServer1.lan" # 
-PORT_NUM = 8765
 
 DEF_INTERVAL = 10000  #### FIXME: 1000.0 / DEF_SCAN_FREQ  # in msecs
 
@@ -333,7 +332,7 @@ def update(ranges, angles, margins, intersect, options, intensityEnb, numInterva
     global lastRanges, lastAngles, lidar
 
     if not lidar:
-        lidar = LidarClient(HOSTNAME, PORT_NUM)
+        lidar = LidarClient(HOSTNAME, COMMAND_PORT)
         if asyncio.run(lidar.init()):
             logging.error("Failed to init")
             return None
