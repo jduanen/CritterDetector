@@ -151,16 +151,6 @@ class Lidar():
             print("TTTTTT")
             yield results
 
-    '''
-    def info(self):
-        if not self.laser:
-            logging.error("Lidar not initialized")
-            return None
-        r = self.laser.getDeviceInfo(????)
-        print(f"INFO: {r}")
-        return(r)
-    '''
-
     def status(self):
         stat = {'laser': None, 'ok': ydlidar.os_isOk(), 'scanning': None,
                 'streaming': self.streaming, 'numScans': self.numScans,
@@ -170,6 +160,7 @@ class Lidar():
         if self.laser:
             stat['laser'] = True
             stat['scanning'] = self.laser.isScanning()
+            #### TODO add info from self.laser.getDeviceInfo()
         return stat
 
     def setAngles(self, minAngle, maxAngle):
