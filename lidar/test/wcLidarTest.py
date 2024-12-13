@@ -32,14 +32,21 @@ async def cli(lidar):
                 response = await lidar.init(opts)
                 print(f"INIT: {response}")
             elif cliCmd == 'm':
-                #### FIXME
                 names = ['intensities']
-                for i in range(3):
-                    response = await lidar.stream(names)
-                    print(f"stream ({i}): {response}")
-                print("stream stopping...")
-                response = await lidar.stop()
-                print("stream done")
+                if not await lidar.stream(names):
+                    '''
+                    for i in range(3):
+                        response = await lidar.getScan()
+                        if response == None:
+                            print("stream received empty, quitting")
+                            break
+                        print(f"stream ({i}): {response}")
+                    '''
+                    print("stream stopping...")
+                    response = await lidar.stop()
+                    print("stream done")
+                else:
+                    print("stream failed")
             elif cliCmd == 'p':
                 names = ['angles', 'distances', 'intensities']
                 response = await lidar.scan(names)

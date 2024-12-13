@@ -9,6 +9,8 @@ import asyncio
 from enum import Enum
 import json
 import logging
+#from queue import Queue
+import threading
 import websockets
 
 from ..shared import MessageTypes, Commands
@@ -30,6 +32,32 @@ class LidarClient():
         self.dataURI = f"ws://{hostname}:{dataPort}"
         self.inited = False
         self.streaming = False
+        self.msgQ = asyncio.Queue()
+        self.thread = threading.Thread(target=self._runStreamReader)
+        self.thread.start()
+
+    def _runStreamReader(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self._streamReader())
+
+    async def _streamReader(self):
+        print("STREAMREADER")
+        try:
+            async with websockets.connect(self.dataURI, ping_interval=DEF_PING, ping_timeout=DEF_PING) as dataSocket:
+                while True:
+                    try:
+                        response = await dataSocket.recv()
+                        print(f"STREAMREADER: {type(response)}")
+                        if response:
+                            await self.msgQ.put(response)
+                        else:
+                            break
+                    except websockets.exceptions.ConnectionClosed:
+                        print("DATA CONNECTION CLOSED")  #### FIXME
+                print("STREAMING break")
+        except ConnectionRefusedError as ex:
+            logging.error(f"Unable to connect to lidar server data socket: {ex}")
 
     async def _sendHalt(self):
         try:
@@ -152,24 +180,32 @@ class LidarClient():
 
     async def stream(self, names=DEF_SCAN_NAMES):
         logging.info("STREAM")
+        if self.streaming:
+            logging.error("Already Streaming, can't start another stream")
+            return True
+        while not self.msgQ.empty():
+            try:
+                self.msgQ.get_nowait()
+                self.msgQ.task_done()
+            except asyncio.QueueEmpty:
+                break
+        print("STREAM READY TO START")
+
+        response = await self._sendCmd(Commands.STREAM.value, {'names': names})
+        if response == None:
+            print("STREAM start failed")
+            return True
+        print("STREAMING STARTED")
         self.streaming = True
-        try:
-            async with websockets.connect(self.dataURI, ping_interval=DEF_PING, ping_timeout=DEF_PING) as dataSocket:
-                print("STREAM READY")
-                response = await self._sendCmd(Commands.STREAM.value, {'names': names})
-                while True:
-                    try:
-                        response = await dataSocket.recv()
-                        print(f"STREAM: {response}")
-                        return response
-#                        yield response
-                    except websockets.exceptions.ConnectionClosed:
-                        print("DATA CONNECTION CLOSED")  #### FIXME
-                        break
-                print("STREAMING DONE")
-        except ConnectionRefusedError as ex:
-            logging.error(f"Unable to connect to lidar server data socket: {ex}")
-        self.streaming = False
+        return False
+
+    async def getScan(self):
+        if not self.streaming:
+            logging.error("Not streaming")
+            return None
+        response = await self.msgQ.get()
+        self.msgQ.task_done()
+        return response
 
     async def version(self):
         logging.info("VERSION")

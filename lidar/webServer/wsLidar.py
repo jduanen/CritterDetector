@@ -30,16 +30,18 @@ WS_LIDAR_VERSION = "1.3.0"  # N.B. Must match lidar.py library's version
 
 HOSTNAME = "0.0.0.0"
 
-PING = 20
+PING = 20       # ping every 20????
 
 scanner = None
 cmdServer = dataServer = None
-dataSocket = None
+streamNames = None
+streaming = asyncio.Event()
 
 
 async def cmdHandler(websocket):
-    global scanner
+    global scanner, streamNames
 
+    streaming.clear()
     async for message in websocket:
         msg = json.loads(message)
         if not 'type' in msg:
@@ -47,7 +49,7 @@ async def cmdHandler(websocket):
             logging.error(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
             logging.debug(f"Send Response: {response}")
-            await websocket.send(json.dumps(response))
+            await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
             return True
         if msg['type'] == MessageTypes.HALT.value:
             if scanner:
@@ -56,7 +58,7 @@ async def cmdHandler(websocket):
                 cmdServer.close()
             if dataServer:
                 dataServer.close()
-            logging.info("Received Stop message, exit")
+            logging.info("Received Halt message, exit")
             return False
         if msg['type'] == MessageTypes.STATUS.value:
             logging.info("Received Status request message")
@@ -66,14 +68,14 @@ async def cmdHandler(websocket):
             res = {'scanner': not scanner == None, 'status': status}
             response = {'type': MessageTypes.REPLY.value} | res
             logging.debug(f"Send Response: {response}")
-            await websocket.send(json.dumps(response))
+            await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
             return True
         if msg['type'] != MessageTypes.CMD.value:
             errMsg = f"Not a command, ignoring: {msg['type']}"
             logging.error(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
             logging.debug(f"Send Response: {response}")
-            await websocket.send(json.dumps(response))
+            await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
             return True
         elif not scanner and not (msg['command'] == Commands.INIT.value):
             # not initialized and this is not a init command
@@ -81,7 +83,7 @@ async def cmdHandler(websocket):
             logging.error(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
             logging.debug(f"Send Response: {response}")
-            await websocket.send(json.dumps(response))
+            await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
             return True
         logging.info(f"Received Command message: {msg['command']}")
         if msg['command'] == Commands.INIT.value:
@@ -105,6 +107,7 @@ async def cmdHandler(websocket):
                     logging.warning(errMsg)
                     response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.STOP.value:
+            streaming.clear()
             if scanner.done():
                 scanner = None
                 response = {'type': MessageTypes.REPLY.value}
@@ -157,6 +160,7 @@ async def cmdHandler(websocket):
                         vals[k] = v
                 response = {'type': MessageTypes.REPLY.value, 'values': vals}
         elif msg['command'] == Commands.SCAN.value:
+            streaming.clear()
             if scanner.laserEnable(True):
                 errMsg = "Failed to enable laser"
                 logging.warning(errMsg)
@@ -182,23 +186,18 @@ async def cmdHandler(websocket):
                 logging.warning(errMsg)
                 response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         elif msg['command'] == Commands.STREAM.value:
+            print("STREAM: got command")
             if scanner.laserEnable(True):
                 errMsg = "Failed to enable laser"
                 logging.warning(errMsg)
                 response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
+                streaming.clear()
             else:
                 response = {'type': MessageTypes.REPLY.value}
-            await websocket.send(json.dumps(response))  #### TODO should I block here?
-
-            pointsGen = scanner.stream(msg['names'])
-            for points in pointsGen:
-                if points:
-                    response = {'type': MessageTypes.REPLY.value, 'values': points}
-                    #### TODO send points on data socket -- binary or JSON????
-                    await dataSocket.send(json.dumps(response))  #### TODO should I block here?
-                else:
-                    logging.warning("Failed to get streaming samples, continuing...")
-            print("STREAM: done")
+                streamNames = msg['names']
+                streaming.set()
+            await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
+            print("STREAM: responded")
         elif msg['command'] == Commands.VERSION.value:
             version = scanner.getVersion()
             if version:
@@ -212,11 +211,19 @@ async def cmdHandler(websocket):
             logging.warning(errMsg)
             response = {'type': MessageTypes.ERROR.value, 'error': errMsg}
         logging.debug(f"Send Response: {response}")
-        await websocket.send(json.dumps(response))  #### TODO should I block here?
+        await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
 
 async def dataHandler(websocket):
-    dataSocket = websocket
-    print("DATA HANDLER")
+    print("STREAM: startup")
+    while True:
+        await streaming.wait()
+        print("STREAM: run")
+        for points in scanner.stream(streamNames):
+            response = {'type': MessageTypes.REPLY.value, 'values': points}
+            #### TODO send points on data socket -- binary or JSON????
+            await websocket.send(json.dumps(response))  #### TODO should I block here? catch error?
+            print("STREAM: sent")
+    print("STREAM: done")
 
 async def main():
     global cmdServer, dataServer
@@ -235,9 +242,9 @@ if __name__ == "__main__":
         logging.error(f"Version mismatch: ({Lidar.LIDAR_VERSION} != {WS_LIDAR_VERSION})")
         exit(1)
 
+    '''
     def signalHandler(sig, frame):
-        ''' Catch SIGHUP to force a restart and SIGINT to stop.""
-        '''
+        # Catch SIGHUP to force a restart and SIGINT to stop.
         if sig == signal.SIGHUP:
             logging.info("SIGHUP")
             #### TODO stop, reload, and restart everything
@@ -248,6 +255,7 @@ if __name__ == "__main__":
                 scanner.done
                 scanner = None
             exit(1)
+    '''
 
     try:
         asyncio.run(main())
